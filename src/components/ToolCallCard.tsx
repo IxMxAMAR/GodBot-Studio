@@ -1,3 +1,5 @@
+import { ChevronRightIcon } from './Icons';
+
 const TOOL_GROUPS: Record<string, string> = {
   read_file: 'fs', write_file: 'fs', edit_file: 'fs',
   glob: 'fs', grep: 'fs', list_dir: 'fs', read_blob: 'fs',
@@ -23,8 +25,9 @@ export function ToolCallCard({
     .map(([k, v]) => `${k}=${JSON.stringify(v)}`).join(', ');
   return (
     <div className="chat-tool-card" data-group={group}>
-      <div className="head">
-        ▸ {name}({argsPreview})
+      <div className="head" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <ChevronRightIcon size={12} />
+        <span>{name}({argsPreview})</span>
         {durationMs !== undefined && <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>[{durationMs}ms]</span>}
         {blob && <span style={{ color: 'var(--text-muted)', marginLeft: 6 }}>(blob: {blob})</span>}
       </div>
