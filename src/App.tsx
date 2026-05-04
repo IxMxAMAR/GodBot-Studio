@@ -9,6 +9,8 @@ import { ChatPanel } from './components/ChatPanel';
 import { Splitter } from './components/Splitter';
 import { SettingsPanel } from './components/SettingsPanel';
 import { SessionList } from './components/SessionList';
+import { ProjectSection } from './components/ProjectSection';
+import { MemoryPanel } from './components/MemoryPanel';
 import { RefreshIcon, CloseIcon } from './components/Icons';
 import { useStore } from './state/store';
 import './styles/globals.css';
@@ -32,7 +34,9 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
-  const showLeft = activity === 'files';
+  const showFiles = activity === 'files';
+  const showMemory = activity === 'memory';
+  const showLeft = showFiles || showMemory;
   const showSettings = activity === 'settings';
 
   // Grid columns: activity-bar | (left-sidebar splitter)? | center | (splitter right-sidebar)?
@@ -45,7 +49,7 @@ export default function App() {
       <TitleBar workspace={workspace} />
       <div className="main-area" style={{ gridTemplateColumns }}>
         <ActivityBar active={activity} onPick={setActivity} />
-        {showLeft && (
+        {showFiles && (
           <div className="left-sidebar">
             <div className="header header-row">
               <span>Files</span>
@@ -77,10 +81,19 @@ export default function App() {
             </div>
             {workspace ? (
               <div className="left-sidebar-scroll">
+                <ProjectSection />
                 <SessionList />
                 <FileTree />
               </div>
             ) : <WorkspacePicker />}
+          </div>
+        )}
+        {showMemory && (
+          <div className="left-sidebar">
+            <div className="header">Memory</div>
+            <div className="left-sidebar-scroll">
+              <MemoryPanel />
+            </div>
           </div>
         )}
         {showLeft && <Splitter side="left" onResize={setLeftWidth} />}

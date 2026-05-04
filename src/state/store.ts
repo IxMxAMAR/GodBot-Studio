@@ -68,6 +68,14 @@ interface State {
   // Set by ChatPanel on mount; called by EditorPane's context-menu actions.
   sendChatMessage: ((text: string) => void) | null;
   setSendChatMessage: (fn: ((text: string) => void) | null) => void;
+
+  // Project understanding (sub-project 10.1) — cached summary keyed by absolute workspace path.
+  projectSummary: Record<string, string>;
+  setProjectSummary: (workspace: string, summary: string) => void;
+
+  // Plan mode (sub-project 10.3) — true while a /plan run is sequentially advancing.
+  planRunning: boolean;
+  setPlanRunning: (b: boolean) => void;
 }
 
 export const useStore = create<State>()(
@@ -161,6 +169,14 @@ export const useStore = create<State>()(
 
   sendChatMessage: null,
   setSendChatMessage: (fn) => set({ sendChatMessage: fn }),
+
+  projectSummary: {},
+  setProjectSummary: (workspace, summary) => set((s) => ({
+    projectSummary: { ...s.projectSummary, [workspace]: summary },
+  })),
+
+  planRunning: false,
+  setPlanRunning: (b) => set({ planRunning: b }),
     }),
     {
       name: 'godbot-studio-ui',
@@ -173,6 +189,7 @@ export const useStore = create<State>()(
         defaultProvider: state.defaultProvider,
         defaultModel: state.defaultModel,
         autoApprove: state.autoApprove,
+        projectSummary: state.projectSummary,
       }),
     }
   )

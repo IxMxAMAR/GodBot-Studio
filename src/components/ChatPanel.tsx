@@ -7,10 +7,12 @@ import { DiffApprovalCard } from './DiffApprovalCard';
 import { ThinkingPulse } from './ThinkingPulse';
 import { ThinkingBlock } from './ThinkingBlock';
 import { MentionPopup } from './MentionPopup';
+import { PlanCard } from './PlanCard';
 import { DAEMON_URL } from '../api/config';
 import { StopIcon } from './Icons';
 import { parseStreaming } from '../api/react-stream';
 import { walkWorkspace, type WalkEntry } from '../api/tauri';
+import type { PlanPayload, PlanTask } from '../state/types';
 
 export function ChatPanel() {
   const client = useMemo(() => new GodbotClient(DAEMON_URL), []);
@@ -256,13 +258,28 @@ export function ChatPanel() {
         // at least sees what the model said.
         const text = parsed.finalAnswer || (parsed.done ? '' : tokenBufferRef.current);
         const rawFallback = !parsed.done && !parsed.finalAnswer && tokenBufferRef.current.length > 0;
-        updateMessage(activeAssistantIdRef.current, {
-          text: text || '(empty reply)',
-          thought: parsed.thought,
-          rawStream: tokenBufferRef.current,
-          rawFallback,
-          pending: false,
-        });
+        // Plan-mode detection: if the final_answer parses as JSON with a
+        // `plan` field, attach the plan to the message and clear text so
+        // the renderer dispatches to <PlanCard>. Parse failures fall
+        // through to normal rendering — that's the spec's defensive path.
+        const plan = tryParsePlan(text);
+        if (plan) {
+          updateMessage(activeAssistantIdRef.current, {
+            text: '',
+            plan,
+            thought: parsed.thought,
+            rawStream: tokenBufferRef.current,
+            pending: false,
+          });
+        } else {
+          updateMessage(activeAssistantIdRef.current, {
+            text: text || '(empty reply)',
+            thought: parsed.thought,
+            rawStream: tokenBufferRef.current,
+            rawFallback,
+            pending: false,
+          });
+        }
       }
     }
   }
@@ -383,10 +400,11 @@ export function ChatPanel() {
           if (m.role === 'assistant') {
             const isActive = m.id === activeAssistantIdRef.current && streaming;
             const hasAnswer = !!m.text;
+            const hasPlan = !!m.plan;
             // Still thinking: no final_answer yet, and either we're actively
             // streaming this bubble OR the agent is mid-turn (e.g. between tool
             // calls). Show pulse + collapsible thought.
-            if (!hasAnswer && isActive) {
+            if (!hasAnswer && !hasPlan && isActive) {
               return (
                 <div key={m.id}>
                   {m.thought && <ThinkingBlock text={m.thought} />}
@@ -397,15 +415,17 @@ export function ChatPanel() {
             // Finished and empty: this bubble was a between-tool-calls scratch
             // bubble that never got a final_answer. Drop it from the UI but keep
             // the thought block if any (preserves the chain-of-thought trace).
-            if (!hasAnswer && !streaming && !m.thought) return null;
+            if (!hasAnswer && !hasPlan && !streaming && !m.thought) return null;
             return (
               <div key={m.id}>
                 {m.thought && <ThinkingBlock text={m.thought} />}
-                {hasAnswer && (
+                {hasPlan ? (
+                  <PlanCard message={m} />
+                ) : hasAnswer ? (
                   <div className={`chat-bubble-assistant${m.rawFallback ? ' raw-fallback' : ''}`}>
                     {m.text}
                   </div>
-                )}
+                ) : null}
               </div>
             );
           }
@@ -444,6 +464,9 @@ export function ChatPanel() {
           return null;
         })}
       </div>
+      {input.startsWith('/plan ') && (
+        <div className="chat-plan-badge">Plan mode</div>
+      )}
       <div className="chat-composer">
         <textarea
           ref={composerRef}
@@ -491,4 +514,32 @@ export function ChatPanel() {
       </div>
     </div>
   );
+}
+
+/**
+ * Defensive plan-shape parser. Returns null on any parse / shape failure
+ * so the caller can fall through to standard text rendering.
+ */
+function tryParsePlan(text: string): PlanPayload | null {
+  if (!text) return null;
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('{')) return null;
+  try {
+    const obj = JSON.parse(trimmed);
+    const plan = obj?.plan;
+    if (!plan || typeof plan.goal !== 'string' || !Array.isArray(plan.tasks)) return null;
+    const tasks: PlanTask[] = plan.tasks
+      .filter((t: any) => t && typeof t.title === 'string')
+      .map((t: any, i: number) => ({
+        id: typeof t.id === 'number' ? t.id : i + 1,
+        title: String(t.title),
+        status: (['pending', 'done', 'skipped', 'in_progress'].includes(t.status)
+          ? t.status
+          : 'pending') as PlanTask['status'],
+      }));
+    if (tasks.length === 0) return null;
+    return { goal: plan.goal, tasks };
+  } catch {
+    return null;
+  }
 }

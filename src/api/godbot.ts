@@ -52,6 +52,14 @@ export interface ModelsResponse {
   error?: string;
 }
 
+/** Item shape returned by GET /api/memory. */
+export interface MemoryNote {
+  timestamp: string;
+  content: string;
+  tags: string[];
+  workspace: string | null;
+}
+
 export class GodbotClient {
   constructor(public baseUrl = 'http://127.0.0.1:7879') {
     this.baseUrl = baseUrl.replace(/\/$/, '');
@@ -140,6 +148,43 @@ export class GodbotClient {
     const r = await fetch(`${this.baseUrl}/api/tools`);
     if (!r.ok) return [];
     return r.json();
+  }
+
+  async listMemory(workspace?: string, q?: string): Promise<MemoryNote[]> {
+    const params = new URLSearchParams();
+    if (workspace) params.set('workspace', workspace);
+    if (q) params.set('q', q);
+    const qs = params.toString();
+    const r = await fetch(`${this.baseUrl}/api/memory${qs ? `?${qs}` : ''}`);
+    if (!r.ok) throw new Error(`listMemory ${r.status}: ${await r.text()}`);
+    const body = await r.json();
+    return (body.notes ?? []) as MemoryNote[];
+  }
+
+  async pinNote(timestamp: string, pin: boolean): Promise<void> {
+    const r = await fetch(`${this.baseUrl}/api/memory/pin`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ timestamp, pin }),
+    });
+    if (!r.ok) throw new Error(`pinNote ${r.status}: ${await r.text()}`);
+  }
+
+  async deleteNote(timestamp: string): Promise<void> {
+    const r = await fetch(`${this.baseUrl}/api/memory/delete`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ timestamp }),
+    });
+    if (!r.ok) throw new Error(`deleteNote ${r.status}: ${await r.text()}`);
+  }
+
+  async autoSummarize(workspace: string, force = false): Promise<{ summary: string; cached: boolean }> {
+    const r = await fetch(`${this.baseUrl}/api/memory/auto_summarize`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ workspace, force }),
+    });
+    if (!r.ok) throw new Error(`autoSummarize ${r.status}: ${await r.text()}`);
+    const body = await r.json();
+    return { summary: String(body.summary ?? ''), cached: !!body.cached };
   }
 
   async *stream(sid: string, signal?: AbortSignal): AsyncGenerator<GodbotEvent> {

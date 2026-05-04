@@ -897,3 +897,251 @@
   cursor: pointer;
 }
 .session-list-more:hover { color: var(--text); border-color: var(--text-muted); }
+
+/* Project section — auto-summarized workspace blurb above SessionList. */
+.project-section {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  padding-bottom: 4px;
+  flex-shrink: 0;
+}
+.project-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+}
+.project-section-body { padding: 0 12px 6px; }
+.project-section-empty {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-style: italic;
+  padding: 4px 0;
+}
+.project-section-error {
+  color: var(--danger);
+  font-size: 11px;
+  padding: 4px 0;
+}
+.project-summary-text {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+/* Memory panel — workspace-scoped notes list. */
+.memory-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--surface);
+}
+.memory-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+}
+.memory-panel-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+.memory-panel-search {
+  padding: 6px 12px;
+}
+.memory-panel-search input {
+  width: 100%;
+  font-size: 11px;
+}
+.memory-panel-error {
+  margin: 0 12px 4px;
+  color: var(--danger);
+  font-size: 11px;
+}
+.memory-panel-empty {
+  padding: 8px 12px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-style: italic;
+}
+.memory-panel-list {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 6px;
+}
+
+.memory-row {
+  border-left: 2px solid transparent;
+  padding: 4px 10px;
+  font-size: 11px;
+  border-bottom: 1px solid var(--border);
+}
+.memory-row.pinned { border-left-color: var(--accent); background: var(--surface-2); }
+.memory-row-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.memory-row-when {
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+  font-size: 10px;
+  flex-shrink: 0;
+}
+.memory-row-preview {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  padding: 2px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+.memory-row-preview:hover { color: var(--accent); background: transparent; }
+.memory-row-pin,
+.memory-row-delete {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.memory-row-pin:hover { color: var(--warn); }
+.memory-row.pinned .memory-row-pin { color: var(--warn); }
+.memory-row-delete:hover { color: var(--danger); }
+.memory-row-body {
+  margin: 6px 0 4px;
+  padding: 6px 8px;
+  font-family: var(--font-ui);
+  font-size: 11px;
+  color: var(--text);
+  background: var(--bg);
+  border-radius: 3px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+/* Plan card — rendered in place of an assistant bubble whose JSON
+ * parsed into a {plan} payload. */
+.plan-card {
+  border: 1px solid var(--accent);
+  background: var(--surface-2);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin: 6px 0;
+  font-size: 12px;
+}
+.plan-card-head {
+  margin-bottom: 8px;
+}
+.plan-goal {
+  color: var(--accent);
+  font-size: 13px;
+}
+.plan-task-list {
+  margin: 0;
+  padding: 0 0 0 4px;
+  list-style: none;
+}
+.plan-task {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  border-bottom: 1px dashed var(--border);
+}
+.plan-task:last-child { border-bottom: none; }
+.plan-task-indicator {
+  width: 14px;
+  text-align: center;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+.plan-task-done .plan-task-indicator { color: var(--success); }
+.plan-task-skipped .plan-task-indicator { color: var(--text-muted); }
+.plan-task-in_progress .plan-task-indicator { color: var(--warn); }
+.plan-task-title {
+  flex: 1;
+  color: var(--text);
+  word-break: break-word;
+}
+.plan-task-skipped .plan-task-title {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+.plan-task-done .plan-task-title { color: var(--text-muted); }
+.plan-task-edit {
+  flex: 1;
+  font-size: 12px;
+  background: var(--bg);
+}
+.plan-task-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.plan-task-btn:hover { color: var(--text); border-color: var(--text-muted); }
+.plan-card-actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 6px;
+}
+.plan-run-btn {
+  background: var(--accent);
+  color: var(--bg);
+  padding: 4px 12px;
+  border-radius: 3px;
+  font-weight: 600;
+  font-size: 11px;
+  border: none;
+  cursor: pointer;
+}
+.plan-run-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.plan-abort-btn {
+  background: var(--danger);
+  color: white;
+  padding: 4px 12px;
+  border-radius: 3px;
+  font-weight: 600;
+  font-size: 11px;
+  border: none;
+  cursor: pointer;
+}
+
+/* /plan badge — shown above the chat composer while typing /plan ... */
+.chat-plan-badge {
+  display: inline-block;
+  align-self: flex-start;
+  margin: 0 8px 4px;
+  padding: 2px 8px;
+  background: var(--accent);
+  color: var(--bg);
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}

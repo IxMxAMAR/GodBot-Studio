@@ -1,4 +1,4 @@
-import { FilesIcon, ChatIcon, SettingsIcon } from './Icons';
+import { FilesIcon, ChatIcon, SettingsIcon, MemoryIcon } from './Icons';
 import { useStore } from '../state/store';
 import type { ActivityKind } from '../state/types';
 
@@ -17,6 +17,14 @@ export function ActivityBar({
         aria-label="Files"
       >
         <FilesIcon />
+      </button>
+      <button
+        className={active === 'memory' ? 'active' : ''}
+        onClick={() => onPick('memory')}
+        title="Memory"
+        aria-label="Memory"
+      >
+        <MemoryIcon />
       </button>
       <button
         className={showChat ? 'active' : ''}

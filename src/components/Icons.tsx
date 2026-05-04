@@ -126,3 +126,24 @@ export function SpinnerIcon({ size = 14, className }: IconProps) {
     </svg>
   );
 }
+
+export function MemoryIcon({ size = 16, className }: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+      className={className}>
+      <rect x="3" y="5" width="18" height="14" rx="2" />
+      <polygon points="12,8.5 13.2,11 15.8,11 13.7,12.6 14.5,15 12,13.6 9.5,15 10.3,12.6 8.2,11 10.8,11" />
+    </svg>
+  );
+}
+
+export function StarIcon({ size = 14, className, filled = false }: IconProps & { filled?: boolean }) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+      fill={filled ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.75"
+      strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <polygon points="12,2 15.1,8.6 22,9.6 17,14.5 18.2,21.5 12,18.2 5.8,21.5 7,14.5 2,9.6 8.9,8.6" />
+    </svg>
+  );
+}
