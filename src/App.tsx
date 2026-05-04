@@ -6,6 +6,7 @@ import { WorkspacePicker } from './components/WorkspacePicker';
 import { EditorPane } from './components/EditorPane';
 import { ChatPanel } from './components/ChatPanel';
 import { Splitter } from './components/Splitter';
+import { RefreshIcon, CloseIcon } from './components/Icons';
 import { useStore } from './state/store';
 import './styles/globals.css';
 import './styles/app.css';
@@ -47,7 +48,7 @@ export default function App() {
                     title="Refresh"
                     className="icon-btn"
                     onClick={() => useStore.getState().refreshTree()}
-                  >↻</button>
+                  ><RefreshIcon /></button>
                   <button
                     aria-label="Close folder"
                     title="Close folder"
@@ -62,7 +63,7 @@ export default function App() {
                       useStore.getState().setDaemonStatus('idle');
                       useStore.setState({ openFiles: [], activePath: null });
                     }}
-                  >×</button>
+                  ><CloseIcon /></button>
                 </div>
               )}
             </div>

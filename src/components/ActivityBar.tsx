@@ -1,4 +1,5 @@
-type ActivityKind = 'files' | 'chat' | 'settings';
+import { FilesIcon, ChatIcon, SettingsIcon } from './Icons';
+import type { ActivityKind } from '../state/types';
 
 export function ActivityBar({
   active, onPick,
@@ -11,7 +12,7 @@ export function ActivityBar({
         title="Files"
         aria-label="Files"
       >
-        ☰
+        <FilesIcon />
       </button>
       <button
         className={active === 'chat' ? 'active' : ''}
@@ -19,7 +20,7 @@ export function ActivityBar({
         title="Chat"
         aria-label="Chat"
       >
-        ◇
+        <ChatIcon />
       </button>
       <button
         className={active === 'settings' ? 'active' : ''}
@@ -27,7 +28,7 @@ export function ActivityBar({
         title="Settings"
         aria-label="Settings"
       >
-        ⚙
+        <SettingsIcon />
       </button>
     </div>
   );
