@@ -9,6 +9,7 @@ export interface OpenFile {
   path: string;
   name: string;
   content: string;
+  originalContent: string;   // snapshot at open time / after save
   dirty: boolean;
 }
 

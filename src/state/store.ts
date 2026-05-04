@@ -51,7 +51,8 @@ export const useStore = create<State>((set) => ({
     if (s.openFiles.find((f) => f.path === file.path)) {
       return { activePath: file.path };
     }
-    return { openFiles: [...s.openFiles, file], activePath: file.path };
+    const enriched = { ...file, originalContent: file.originalContent ?? file.content };
+    return { openFiles: [...s.openFiles, enriched], activePath: file.path };
   }),
   closeFile: (path) => set((s) => {
     const remaining = s.openFiles.filter((f) => f.path !== path);
@@ -65,12 +66,12 @@ export const useStore = create<State>((set) => ({
   setActivePath: (path) => set({ activePath: path }),
   updateContent: (path, content) => set((s) => ({
     openFiles: s.openFiles.map((f) =>
-      f.path === path ? { ...f, content, dirty: true } : f
+      f.path === path ? { ...f, content, dirty: content !== f.originalContent } : f
     ),
   })),
   markClean: (path) => set((s) => ({
     openFiles: s.openFiles.map((f) =>
-      f.path === path ? { ...f, dirty: false } : f
+      f.path === path ? { ...f, dirty: false, originalContent: f.content } : f
     ),
   })),
 
