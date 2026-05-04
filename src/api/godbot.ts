@@ -1,7 +1,14 @@
 export interface TokenEvent { type: 'token'; text: string; }
 export interface ToolCallEvent { type: 'tool_call'; id: string; name: string; args: Record<string, unknown>; }
 export interface ToolResultEvent { type: 'tool_result'; id: string; preview: string; blob: string | null; duration_ms: number; }
-export interface GateEvent { type: 'gate'; id: string; name: string; args: Record<string, unknown>; }
+export interface GateEvent {
+  type: 'gate';
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+  /** Populated for write_file/edit_file gates so UIs can render a diff. */
+  fs_diff?: { path: string; before: string | null; after: string } | null;
+}
 export interface AgentErrorEvent { type: 'agent_error'; message: string; recoverable: boolean; }
 export interface DoneEvent { type: 'done'; step_count: number; }
 export type GodbotEvent = TokenEvent | ToolCallEvent | ToolResultEvent | GateEvent | AgentErrorEvent | DoneEvent;
@@ -50,10 +57,17 @@ export class GodbotClient {
     if (!r.ok) throw new Error(`send ${r.status}: ${await r.text()}`);
   }
 
-  async resolveGate(sid: string, callId: string, decision: 'allow' | 'deny' | 'always'): Promise<void> {
+  async resolveGate(
+    sid: string,
+    callId: string,
+    decision: 'allow' | 'deny' | 'always',
+    argsOverride?: Record<string, unknown>,
+  ): Promise<void> {
+    const body: Record<string, unknown> = { session_id: sid, decision };
+    if (argsOverride) body.args_override = argsOverride;
     const r = await fetch(`${this.baseUrl}/api/gate/${callId}`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ session_id: sid, decision }),
+      body: JSON.stringify(body),
     });
     if (!r.ok) throw new Error(`gate ${r.status}: ${await r.text()}`);
   }

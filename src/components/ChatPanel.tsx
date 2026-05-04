@@ -3,6 +3,7 @@ import { GodbotClient, GodbotEvent } from '../api/godbot';
 import { useStore } from '../state/store';
 import { ToolCallCard } from './ToolCallCard';
 import { GateCard } from './GateCard';
+import { DiffApprovalCard } from './DiffApprovalCard';
 import { ThinkingPulse } from './ThinkingPulse';
 import { ThinkingBlock } from './ThinkingBlock';
 import { DAEMON_URL } from '../api/config';
@@ -239,6 +240,19 @@ export function ChatPanel() {
             );
           }
           if (m.role === 'gate') {
+            // FS-write gates with a fs_diff payload render the inline diff
+            // card. Everything else (run_powershell, etc.) falls through to
+            // the standard gate card.
+            if (m.fsDiff) {
+              return (
+                <DiffApprovalCard
+                  key={m.id} callId={m.id} name={m.toolName!}
+                  fsDiff={m.fsDiff} sessionId={sessionId!} client={client}
+                  resolved={m.resolved}
+                  onResolved={(decision) => updateMessage(m.id, { resolved: decision })}
+                />
+              );
+            }
             return (
               <GateCard
                 key={m.id} callId={m.id} name={m.toolName!} args={m.toolArgs!}
