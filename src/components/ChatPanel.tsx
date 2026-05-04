@@ -3,18 +3,11 @@ import { GodbotClient, GodbotEvent } from '../api/godbot';
 import { useStore } from '../state/store';
 import { ToolCallCard } from './ToolCallCard';
 import { GateCard } from './GateCard';
+import { ThinkingPulse } from './ThinkingPulse';
+import { ThinkingBlock } from './ThinkingBlock';
 import { DAEMON_URL } from '../api/config';
-import { StopIcon, SpinnerIcon } from './Icons';
-
-function tryExtractFinalAnswer(raw: string): string {
-  try {
-    const p = JSON.parse(raw);
-    if (p && typeof p === 'object' && typeof p.final_answer === 'string') {
-      return p.final_answer;
-    }
-  } catch { /* fall through */ }
-  return raw;
-}
+import { StopIcon } from './Icons';
+import { parseStreaming } from '../api/react-stream';
 
 export function ChatPanel() {
   const client = useMemo(() => new GodbotClient(DAEMON_URL), []);
@@ -119,11 +112,26 @@ export function ChatPanel() {
     if (ev.type === 'token') {
       tokenBufferRef.current += ev.text;
       if (activeAssistantIdRef.current) {
-        updateMessage(activeAssistantIdRef.current, { text: tokenBufferRef.current });
+        const parsed = parseStreaming(tokenBufferRef.current);
+        // While streaming: text = whatever's parseable as final_answer (often '').
+        // The thought is shown via ThinkingPulse/ThinkingBlock in the renderer.
+        updateMessage(activeAssistantIdRef.current, {
+          text: parsed.finalAnswer,
+          thought: parsed.thought,
+          rawStream: tokenBufferRef.current,
+        });
       }
     } else if (ev.type === 'tool_call') {
+      // Snapshot the streamed thought onto the active assistant bubble before
+      // we move on to the tool-call card. The bubble stays in the conversation
+      // as a collapsible "Thinking" record above the tool call.
       if (activeAssistantIdRef.current) {
-        updateMessage(activeAssistantIdRef.current, { text: tokenBufferRef.current || '' });
+        const parsed = parseStreaming(tokenBufferRef.current);
+        updateMessage(activeAssistantIdRef.current, {
+          text: parsed.finalAnswer,
+          thought: parsed.thought,
+          rawStream: tokenBufferRef.current,
+        });
       }
       appendMessage({
         id: ev.id, role: 'tool_call', text: '',
@@ -141,17 +149,29 @@ export function ChatPanel() {
         blob: ev.blob,
       });
     } else if (ev.type === 'gate') {
+      const fs_diff = (ev as GodbotEvent & { fs_diff?: { path: string; before: string | null; after: string } }).fs_diff;
       appendMessage({
         id: ev.id, role: 'gate', text: '',
         toolName: ev.name, toolArgs: ev.args,
+        fsDiff: fs_diff ?? undefined,
       });
     } else if (ev.type === 'agent_error') {
       appendMessage({ id: crypto.randomUUID(), role: 'error', text: ev.message });
     } else if (ev.type === 'done') {
-      // Try to parse the buffered text as JSON ReAct and unwrap final_answer.
-      const finalText = tryExtractFinalAnswer(tokenBufferRef.current);
       if (activeAssistantIdRef.current) {
-        updateMessage(activeAssistantIdRef.current, { text: finalText || '(empty reply)' });
+        const parsed = parseStreaming(tokenBufferRef.current);
+        // If JSON.parse never succeeded (parsed.done === false) AND we have
+        // no parseable final_answer, fall back to the raw stream so the user
+        // at least sees what the model said.
+        const text = parsed.finalAnswer || (parsed.done ? '' : tokenBufferRef.current);
+        const rawFallback = !parsed.done && !parsed.finalAnswer && tokenBufferRef.current.length > 0;
+        updateMessage(activeAssistantIdRef.current, {
+          text: text || '(empty reply)',
+          thought: parsed.thought,
+          rawStream: tokenBufferRef.current,
+          rawFallback,
+          pending: false,
+        });
       }
     }
   }
@@ -184,10 +204,31 @@ export function ChatPanel() {
             return <div key={m.id} className="chat-bubble-user">{m.text}</div>;
           }
           if (m.role === 'assistant') {
-            if (!m.text && !streaming) return null;
+            const isActive = m.id === activeAssistantIdRef.current && streaming;
+            const hasAnswer = !!m.text;
+            // Still thinking: no final_answer yet, and either we're actively
+            // streaming this bubble OR the agent is mid-turn (e.g. between tool
+            // calls). Show pulse + collapsible thought.
+            if (!hasAnswer && isActive) {
+              return (
+                <div key={m.id}>
+                  {m.thought && <ThinkingBlock text={m.thought} />}
+                  <ThinkingPulse text={m.thought ?? ''} />
+                </div>
+              );
+            }
+            // Finished and empty: this bubble was a between-tool-calls scratch
+            // bubble that never got a final_answer. Drop it from the UI but keep
+            // the thought block if any (preserves the chain-of-thought trace).
+            if (!hasAnswer && !streaming && !m.thought) return null;
             return (
-              <div key={m.id} className="chat-bubble-assistant">
-                {m.text || <SpinnerIcon size={14} />}
+              <div key={m.id}>
+                {m.thought && <ThinkingBlock text={m.thought} />}
+                {hasAnswer && (
+                  <div className={`chat-bubble-assistant${m.rawFallback ? ' raw-fallback' : ''}`}>
+                    {m.text}
+                  </div>
+                )}
               </div>
             );
           }

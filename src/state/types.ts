@@ -24,6 +24,12 @@ export interface ChatMessage {
   blob?: string | null;
   resolved?: 'allow' | 'always' | 'deny';
   pending?: boolean;
+  // Progressive ReAct parsing state for assistant messages.
+  thought?: string;          // accumulated thought, shown via ThinkingBlock
+  rawStream?: string;        // accumulated raw token stream for the active turn
+  rawFallback?: boolean;     // true when JSON parse failed at done — render text as-is
+  // FS-write gate extras (set on 'gate' role messages when fs_diff is present).
+  fsDiff?: { path: string; before: string | null; after: string };
 }
 
 export type ActivityKind = 'files' | 'chat' | 'settings';

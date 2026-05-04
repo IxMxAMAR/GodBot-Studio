@@ -482,6 +482,14 @@
 .settings-panel .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
 .settings-panel .error-cell { color: var(--danger); font-family: var(--font-mono); font-size: 11px; }
 
+/* Raw-fallback assistant bubble — shown when JSON parse fails at done. */
+.chat-bubble-assistant.raw-fallback {
+  border-left: 2px solid var(--warn, #f59e0b);
+  white-space: pre-wrap;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
 /* Thinking pulse — shown while only `thought` is parseable from the stream. */
 .thinking-pulse {
   display: flex;
