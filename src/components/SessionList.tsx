@@ -5,7 +5,7 @@ import {
   deleteSession,
   type SessionEntry,
 } from '../api/tauri';
-import { GodbotClient } from '../api/godbot';
+import { GodbotClient, type SearchHit } from '../api/godbot';
 import { DAEMON_URL } from '../api/config';
 import { CloseIcon, RefreshIcon } from './Icons';
 
@@ -37,6 +37,13 @@ export function SessionList() {
   const [error, setError] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
+
+  // Cross-session search state. When `searchResults` is non-null we
+  // render the result list in place of the regular session rows; ESC
+  // (or clearing the input) restores the normal view.
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchHit[] | null>(null);
+  const [searching, setSearching] = useState(false);
 
   const sessionsRoot = workspace ? `${workspace}/.godbot-sessions` : null;
 
@@ -101,13 +108,24 @@ export function SessionList() {
       return;
     }
     try {
-      const { defaultProvider, defaultModel, autoApprove } = useStore.getState();
+      const { defaultProvider, defaultModel, autoApprove, defaultMaxTokens, defaultMaxUsd } =
+        useStore.getState();
       const sid = await client.newSession(workspace, autoApprove, {
         provider: defaultProvider || undefined,
         model: defaultModel || undefined,
       });
       clearChat();
       setSessionId(sid);
+      if (defaultMaxTokens != null || defaultMaxUsd != null) {
+        try {
+          await client.setBudget(sid, {
+            max_total_tokens: defaultMaxTokens,
+            max_usd: defaultMaxUsd,
+          });
+        } catch (be) {
+          console.warn('setBudget failed', be);
+        }
+      }
       const info = await client.getSession(sid);
       if (info?.model) setModel(info.model);
       void refresh();
@@ -135,6 +153,34 @@ export function SessionList() {
   const visible = useMemo(() => {
     return showAll ? entries : entries.slice(0, VISIBLE_LIMIT);
   }, [entries, showAll]);
+
+  async function runSearch() {
+    const q = searchQuery.trim();
+    if (!q) {
+      setSearchResults(null);
+      return;
+    }
+    if (!daemonHealthy) {
+      setError('Daemon offline — start it from the status bar first.');
+      return;
+    }
+    setSearching(true);
+    setError(null);
+    try {
+      const r = await client.searchSessions(q, workspace || undefined, 20);
+      setSearchResults(r.matches ?? []);
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  function clearSearch() {
+    setSearchQuery('');
+    setSearchResults(null);
+  }
 
   if (!workspace) return null;
 
@@ -167,25 +213,73 @@ export function SessionList() {
       </div>
       {!collapsed && (
         <>
-          {error && <div className="session-list-error">{error}</div>}
-          {loading && entries.length === 0 && <div className="session-list-empty">loading…</div>}
-          {!loading && entries.length === 0 && (
-            <div className="session-list-empty">No sessions yet. Start chatting to create one.</div>
-          )}
-          {visible.map((e) => (
-            <SessionRow
-              key={e.sid}
-              entry={e}
-              active={e.sid === sessionId}
-              onClick={() => switchTo(e.sid)}
-              onDelete={() => onDelete(e.sid)}
+          <div className="session-search">
+            <input
+              type="text"
+              className="session-search-input"
+              value={searchQuery}
+              placeholder="Search sessions…"
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                if (e.target.value.trim() === '') setSearchResults(null);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void runSearch();
+                } else if (e.key === 'Escape') {
+                  e.preventDefault();
+                  clearSearch();
+                  (e.target as HTMLInputElement).blur();
+                }
+              }}
             />
-          ))}
-          {!showAll && entries.length > VISIBLE_LIMIT && (
-            <button
-              className="session-list-more"
-              onClick={() => setShowAll(true)}
-            >Show all ({entries.length})</button>
+            {searchQuery && (
+              <button
+                className="session-search-clear"
+                onClick={clearSearch}
+                title="Clear search (Esc)"
+              >×</button>
+            )}
+          </div>
+          {error && <div className="session-list-error">{error}</div>}
+          {searchResults !== null ? (
+            <>
+              {searching && <div className="session-list-empty">searching…</div>}
+              {!searching && searchResults.length === 0 && (
+                <div className="session-list-empty">No matches.</div>
+              )}
+              {searchResults.map((hit, i) => (
+                <SearchResultRow
+                  key={`${hit.sid}-${hit.index ?? i}`}
+                  hit={hit}
+                  active={hit.sid === sessionId}
+                  onClick={() => { void switchTo(hit.sid); }}
+                />
+              ))}
+            </>
+          ) : (
+            <>
+              {loading && entries.length === 0 && <div className="session-list-empty">loading…</div>}
+              {!loading && entries.length === 0 && (
+                <div className="session-list-empty">No sessions yet. Start chatting to create one.</div>
+              )}
+              {visible.map((e) => (
+                <SessionRow
+                  key={e.sid}
+                  entry={e}
+                  active={e.sid === sessionId}
+                  onClick={() => switchTo(e.sid)}
+                  onDelete={() => onDelete(e.sid)}
+                />
+              ))}
+              {!showAll && entries.length > VISIBLE_LIMIT && (
+                <button
+                  className="session-list-more"
+                  onClick={() => setShowAll(true)}
+                >Show all ({entries.length})</button>
+              )}
+            </>
           )}
         </>
       )}
@@ -225,6 +319,35 @@ function SessionRow({
       >
         <CloseIcon size={11} />
       </button>
+    </div>
+  );
+}
+
+function SearchResultRow({
+  hit,
+  active,
+  onClick,
+}: {
+  hit: SearchHit;
+  active: boolean;
+  onClick: () => void;
+}) {
+  const subtitle = (hit.preview || '').trim() || '(match)';
+  return (
+    <div
+      className={`session-row${active ? ' active' : ''}`}
+      onClick={onClick}
+      title={hit.sid}
+    >
+      <div className="session-row-meta">
+        <span className="session-when">
+          {hit.started_at ? shortStarted(hit.started_at) : hit.sid.slice(0, 8)}
+        </span>
+        {typeof hit.index === 'number' && (
+          <span className="session-model">turn {hit.index}</span>
+        )}
+      </div>
+      <div className="session-row-preview">{subtitle}</div>
     </div>
   );
 }

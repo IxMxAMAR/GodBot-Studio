@@ -1,5 +1,10 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../state/store';
 import { spawnDaemon } from '../api/daemon';
+import { GodbotClient, type SessionCost, type DaemonStats } from '../api/godbot';
+import { DAEMON_URL } from '../api/config';
+
+const COST_POLL_MS = 10_000;
 
 export function StatusBar() {
   const workspace = useStore((s) => s.workspace);
@@ -7,14 +12,53 @@ export function StatusBar() {
   const daemonStatus = useStore((s) => s.daemonStatus);
   const daemonError = useStore((s) => s.daemonError);
   const daemonHealthy = useStore((s) => s.daemonHealthy);
+  const sessionId = useStore((s) => s.sessionId);
+
+  const client = useMemo(() => new GodbotClient(DAEMON_URL), []);
+  const [cost, setCost] = useState<SessionCost | null>(null);
+  const [statsOpen, setStatsOpen] = useState(false);
 
   const onRetry = () => { if (workspace) void spawnDaemon(workspace); };
+
+  // Poll session cost every COST_POLL_MS while a session is bound + the
+  // daemon is healthy. The endpoint is cheap (a single in-memory lookup
+  // on the daemon), so we don't bother coalescing with chat events.
+  const lastSidRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!sessionId || !daemonHealthy) {
+      setCost(null);
+      return;
+    }
+    if (lastSidRef.current !== sessionId) {
+      lastSidRef.current = sessionId;
+      setCost(null);
+    }
+    let cancel = false;
+    async function tick() {
+      if (!sessionId) return;
+      try {
+        const c = await client.getSessionCost(sessionId);
+        if (!cancel) setCost(c);
+      } catch {
+        // 404s while the session is mid-creation are expected — ignore.
+      }
+    }
+    void tick();
+    const id = setInterval(tick, COST_POLL_MS);
+    return () => { cancel = true; clearInterval(id); };
+  }, [sessionId, daemonHealthy, client]);
 
   let label = 'daemon';
   let dotClass = 'bad';
   if (daemonStatus === 'spawning') { label = 'spawning…'; dotClass = 'spinning'; }
   else if (daemonHealthy) { label = 'daemon'; dotClass = 'ok'; }
   else if (daemonStatus === 'error') { label = 'daemon error'; dotClass = 'bad'; }
+
+  // Hide the cost label entirely when the session has zero usage so we
+  // don't show a noisy "$0.00" on a fresh session.
+  const showCost = cost && cost.usage.total_tokens > 0;
+  const costStr = cost ? formatUsd(cost.usd) : '';
+  const turnsStr = cost ? `${cost.usage.turns} turn${cost.usage.turns === 1 ? '' : 's'}` : '';
 
   return (
     <div className="status-bar">
@@ -28,9 +72,105 @@ export function StatusBar() {
         {label}
       </button>
       <span className="item">model: {modelName || '—'}</span>
+      {showCost && (
+        <span
+          className="item status-cost"
+          title={cost
+            ? `${cost.usage.input_tokens} in / ${cost.usage.output_tokens} out tokens · ${cost.provider}/${cost.model}${cost.matched ? '' : ' (rate unknown)'}`
+            : ''}
+        >
+          {costStr} · {turnsStr}{cost && !cost.matched ? ' (rate unknown)' : ''}
+        </span>
+      )}
+      <button
+        className="item daemon-btn status-stats-btn"
+        onClick={() => setStatsOpen(true)}
+        disabled={!daemonHealthy}
+        title="Daemon stats"
+      >
+        stats
+      </button>
       <span className="item" style={{ marginLeft: 'auto' }}>
         {workspace ?? 'no workspace'}
       </span>
+      {statsOpen && (
+        <StatsModal client={client} onClose={() => setStatsOpen(false)} />
+      )}
+    </div>
+  );
+}
+
+function formatUsd(n: number): string {
+  if (!Number.isFinite(n)) return '$0.00';
+  if (n < 0.01) return `$${n.toFixed(4)}`;
+  if (n < 1) return `$${n.toFixed(3)}`;
+  return `$${n.toFixed(2)}`;
+}
+
+function StatsModal({ client, onClose }: { client: GodbotClient; onClose: () => void }) {
+  const [stats, setStats] = useState<DaemonStats | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancel = false;
+    (async () => {
+      try {
+        const s = await client.getStats();
+        if (!cancel) setStats(s);
+      } catch (e: any) {
+        if (!cancel) setError(String(e?.message ?? e));
+      }
+    })();
+    return () => { cancel = true; };
+  }, [client]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="stats-modal-backdrop" onClick={onClose}>
+      <div className="stats-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="stats-modal-head">
+          <span>Daemon stats</span>
+          <button onClick={onClose} title="Close (Esc)">×</button>
+        </div>
+        {error && <div className="stats-modal-err">{error}</div>}
+        {!stats && !error && <div className="stats-modal-loading">loading…</div>}
+        {stats && (
+          <div className="stats-modal-body">
+            <table>
+              <tbody>
+                <tr><td>Sessions</td><td>{stats.sessions}</td></tr>
+                <tr><td>Turns</td><td>{stats.turns}</td></tr>
+                <tr><td>Tool calls</td><td>{stats.tool_calls_total}</td></tr>
+                <tr>
+                  <td>Total tokens</td>
+                  <td>{Number(stats.usage?.total_tokens ?? 0).toLocaleString()}</td>
+                </tr>
+                <tr>
+                  <td>Estimated cost</td>
+                  <td>{formatUsd(stats.estimated_cost_usd)}</td>
+                </tr>
+              </tbody>
+            </table>
+            {stats.top_tools?.length > 0 && (
+              <div className="stats-modal-section">
+                <div className="stats-modal-h">Top tools</div>
+                <ol>
+                  {stats.top_tools.slice(0, 5).map((t) => (
+                    <li key={t.name}><code>{t.name}</code> · {t.count}</li>
+                  ))}
+                </ol>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

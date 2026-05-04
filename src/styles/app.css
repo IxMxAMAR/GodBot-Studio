@@ -1155,3 +1155,137 @@
   padding: 6px 12px;
   font-size: 12px;
 }
+
+/* Sub-project 18-19: live cost label + stats button on the status bar. */
+.status-bar .status-cost {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+.status-bar .status-stats-btn {
+  margin-left: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-size: 10px;
+}
+
+/* Sub-project 27: cumulative daemon stats modal. */
+.stats-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9000;
+}
+.stats-modal {
+  background: var(--surface);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  min-width: 320px;
+  max-width: 480px;
+  font-size: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+.stats-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+.stats-modal-head button {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+.stats-modal-head button:hover { color: var(--text); }
+.stats-modal-body {
+  padding: 10px 14px;
+}
+.stats-modal-body table { width: 100%; border-collapse: collapse; }
+.stats-modal-body table td { padding: 3px 0; }
+.stats-modal-body table td:last-child {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--font-mono);
+}
+.stats-modal-section { margin-top: 10px; }
+.stats-modal-h {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  margin-bottom: 4px;
+}
+.stats-modal-section ol {
+  margin: 0;
+  padding-left: 18px;
+}
+.stats-modal-loading,
+.stats-modal-err {
+  padding: 12px 14px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.stats-modal-err { color: var(--danger); font-style: normal; }
+
+/* Sub-project 23: cross-session search bar above SessionList. */
+.session-search {
+  position: relative;
+  padding: 4px 8px 6px;
+}
+.session-search-input {
+  width: 100%;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 3px 22px 3px 6px;
+  font-size: 11px;
+  font-family: inherit;
+}
+.session-search-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.session-search-clear {
+  position: absolute;
+  top: 4px;
+  right: 12px;
+  height: calc(100% - 10px);
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 4px;
+}
+.session-search-clear:hover { color: var(--text); }
+
+/* Sub-project 20: per-assistant thumbs feedback. */
+.chat-thumbs-row {
+  display: flex;
+  gap: 6px;
+  margin: -2px 0 6px 10px;
+  opacity: 0.55;
+  transition: opacity 120ms ease;
+}
+.chat-thumbs-row:hover { opacity: 1; }
+.chat-thumb {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 12px;
+  padding: 1px 4px;
+  border-radius: 3px;
+  line-height: 1;
+}
+.chat-thumb:hover { color: var(--text); background: var(--surface-2); }
+.chat-thumb.active { color: var(--accent); opacity: 1; }

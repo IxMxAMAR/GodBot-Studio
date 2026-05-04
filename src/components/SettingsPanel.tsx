@@ -40,6 +40,10 @@ export function SettingsPanel() {
   const setAutoApprove = useStore((s) => s.setAutoApprove);
   const inlineCompletionsEnabled = useStore((s) => s.inlineCompletionsEnabled);
   const setInlineCompletionsEnabled = useStore((s) => s.setInlineCompletionsEnabled);
+  const defaultMaxTokens = useStore((s) => s.defaultMaxTokens);
+  const setDefaultMaxTokens = useStore((s) => s.setDefaultMaxTokens);
+  const defaultMaxUsd = useStore((s) => s.defaultMaxUsd);
+  const setDefaultMaxUsd = useStore((s) => s.setDefaultMaxUsd);
 
   const client = useRef(new GodbotClient(DAEMON_URL)).current;
 
@@ -278,6 +282,48 @@ export function SettingsPanel() {
             <div className="settings-hint">
               Requires a provider that supports <code>/api/complete</code> (OpenAI today; Anthropic/Gemini not yet).
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h3>Budget caps</h3>
+        <p className="settings-blurb" style={{ marginTop: 0 }}>
+          Applied to newly-created sessions. Leave blank for no cap. The active session's cost surfaces in the status bar when usage is non-zero.
+        </p>
+        <div className="settings-grid">
+          <label>Max total tokens</label>
+          <div>
+            <input
+              type="number"
+              min={0}
+              step={1000}
+              value={defaultMaxTokens ?? ''}
+              placeholder="(no cap)"
+              onChange={(e) => {
+                const v = e.target.value.trim();
+                setDefaultMaxTokens(v === '' ? null : Math.max(0, Math.floor(Number(v) || 0)));
+              }}
+              style={{ width: 160 }}
+            />
+            <div className="settings-hint">Combined input + output tokens for the session.</div>
+          </div>
+
+          <label>Max USD</label>
+          <div>
+            <input
+              type="number"
+              min={0}
+              step={0.5}
+              value={defaultMaxUsd ?? ''}
+              placeholder="(no cap)"
+              onChange={(e) => {
+                const v = e.target.value.trim();
+                setDefaultMaxUsd(v === '' ? null : Math.max(0, Number(v) || 0));
+              }}
+              style={{ width: 160 }}
+            />
+            <div className="settings-hint">Hard ceiling on estimated cost in USD.</div>
           </div>
         </div>
       </section>

@@ -86,6 +86,21 @@ interface State {
   // Plan mode (sub-project 10.3) — true while a /plan run is sequentially advancing.
   planRunning: boolean;
   setPlanRunning: (b: boolean) => void;
+
+  // Budget caps applied to newly-created sessions (sub-projects 18-19).
+  // null = no cap; number = applied as max_total_tokens / max_usd via
+  // POST /api/sessions/{sid}/budget right after session creation.
+  defaultMaxTokens: number | null;
+  defaultMaxUsd: number | null;
+  setDefaultMaxTokens: (n: number | null) => void;
+  setDefaultMaxUsd: (n: number | null) => void;
+
+  // Per-turn feedback ratings (sub-project 20). Keyed by `${sid}:${target_index}`.
+  // Seeded by ChatPanel from getFeedback() once per session load and updated
+  // optimistically when the user clicks a thumb.
+  feedbackByKey: Record<string, 'up' | 'down'>;
+  setFeedbackRating: (key: string, rating: 'up' | 'down') => void;
+  clearFeedbackForSession: (sid: string) => void;
 }
 
 export const useStore = create<State>()(
@@ -191,6 +206,24 @@ export const useStore = create<State>()(
 
   planRunning: false,
   setPlanRunning: (b) => set({ planRunning: b }),
+
+  defaultMaxTokens: null,
+  defaultMaxUsd: null,
+  setDefaultMaxTokens: (n) => set({ defaultMaxTokens: n }),
+  setDefaultMaxUsd: (n) => set({ defaultMaxUsd: n }),
+
+  feedbackByKey: {},
+  setFeedbackRating: (key, rating) => set((s) => ({
+    feedbackByKey: { ...s.feedbackByKey, [key]: rating },
+  })),
+  clearFeedbackForSession: (sid) => set((s) => {
+    const prefix = `${sid}:`;
+    const next: Record<string, 'up' | 'down'> = {};
+    for (const [k, v] of Object.entries(s.feedbackByKey)) {
+      if (!k.startsWith(prefix)) next[k] = v;
+    }
+    return { feedbackByKey: next };
+  }),
     }),
     {
       name: 'godbot-studio-ui',
@@ -205,6 +238,8 @@ export const useStore = create<State>()(
         autoApprove: state.autoApprove,
         inlineCompletionsEnabled: state.inlineCompletionsEnabled,
         projectSummary: state.projectSummary,
+        defaultMaxTokens: state.defaultMaxTokens,
+        defaultMaxUsd: state.defaultMaxUsd,
       }),
     }
   )

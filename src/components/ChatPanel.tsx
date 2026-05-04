@@ -87,13 +87,26 @@ export function ChatPanel() {
     let cancel = false;
     (async () => {
       try {
-        const { defaultProvider, defaultModel, autoApprove } = useStore.getState();
+        const { defaultProvider, defaultModel, autoApprove, defaultMaxTokens, defaultMaxUsd } =
+          useStore.getState();
         const sid = await client.newSession(workspace, autoApprove, {
           provider: defaultProvider || undefined,
           model: defaultModel || undefined,
         });
         if (cancel) return;
         setSessionId(sid);
+        // Apply persisted default budget caps. Skipped silently when both
+        // are null to avoid an extra round-trip on every session.
+        if (!cancel && (defaultMaxTokens != null || defaultMaxUsd != null)) {
+          try {
+            await client.setBudget(sid, {
+              max_total_tokens: defaultMaxTokens,
+              max_usd: defaultMaxUsd,
+            });
+          } catch (be) {
+            console.warn('setBudget failed', be);
+          }
+        }
         const info = await client.getSession(sid);
         if (info?.model && !cancel) useStore.getState().setModel(info.model);
       } catch (e: any) {
@@ -113,6 +126,60 @@ export function ChatPanel() {
     const el = conversationRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
+
+  // Seed feedback state from the daemon once per session bind. The
+  // store keeps ratings keyed by `${sid}:${target_index}` so subsequent
+  // optimistic updates from the thumb buttons reuse the same key.
+  useEffect(() => {
+    if (!sessionId || !daemonHealthy) return;
+    let cancel = false;
+    (async () => {
+      try {
+        const fb = await client.getFeedback(sessionId);
+        if (cancel) return;
+        const setRating = useStore.getState().setFeedbackRating;
+        for (const [idxStr, entry] of Object.entries(fb.latest_by_index ?? {})) {
+          if (entry?.rating === 'up' || entry?.rating === 'down') {
+            setRating(`${sessionId}:${idxStr}`, entry.rating);
+          }
+        }
+      } catch { /* daemon may not yet have a feedback file — ignore */ }
+    })();
+    return () => { cancel = true; };
+  }, [sessionId, daemonHealthy, client]);
+
+  /**
+   * Compute the daemon-side `target_index` for the assistant message at
+   * `messageIdx` in the local UI log. The daemon's log only contains
+   * user + assistant entries, so we count those roles up to and
+   * including the target. Returns -1 when the message isn't an
+   * assistant turn (callers should guard).
+   */
+  function computeTargetIndex(messageIdx: number): number {
+    let n = -1;
+    for (let i = 0; i <= messageIdx; i++) {
+      const m = messages[i];
+      if (!m) break;
+      if (m.role === 'user' || m.role === 'assistant') n++;
+    }
+    return n;
+  }
+
+  async function rateAssistant(messageIdx: number, rating: 'up' | 'down') {
+    if (!sessionId) return;
+    const targetIndex = computeTargetIndex(messageIdx);
+    if (targetIndex < 0) return;
+    const key = `${sessionId}:${targetIndex}`;
+    // Optimistic update. Rollback on failure.
+    const prev = useStore.getState().feedbackByKey[key];
+    useStore.getState().setFeedbackRating(key, rating);
+    try {
+      await client.postFeedback(sessionId, targetIndex, rating);
+    } catch (e) {
+      console.warn('postFeedback failed', e);
+      if (prev) useStore.getState().setFeedbackRating(key, prev);
+    }
+  }
 
   // Ctrl+L global shortcut: focus chat composer.
   useEffect(() => {
@@ -393,7 +460,7 @@ export function ChatPanel() {
   return (
     <div className="chat-panel">
       <div className="chat-conversation" ref={conversationRef}>
-        {messages.map((m) => {
+        {messages.map((m, mi) => {
           if (m.role === 'user') {
             return <div key={m.id} className="chat-bubble-user">{m.text}</div>;
           }
@@ -416,6 +483,7 @@ export function ChatPanel() {
             // bubble that never got a final_answer. Drop it from the UI but keep
             // the thought block if any (preserves the chain-of-thought trace).
             if (!hasAnswer && !hasPlan && !streaming && !m.thought) return null;
+            const showThumbs = hasAnswer && !!sessionId && !isActive;
             return (
               <div key={m.id}>
                 {m.thought && <ThinkingBlock text={m.thought} />}
@@ -426,6 +494,12 @@ export function ChatPanel() {
                     {m.text}
                   </div>
                 ) : null}
+                {showThumbs && (
+                  <ThumbsRow
+                    messageIndex={mi}
+                    onRate={(r) => { void rateAssistant(mi, r); }}
+                  />
+                )}
               </div>
             );
           }
@@ -512,6 +586,58 @@ export function ChatPanel() {
           {streaming ? <StopIcon /> : 'Send'}
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Per-assistant-bubble thumbs UI. Reads the persisted rating directly
+ * from the store using the same `${sid}:${target_index}` key the
+ * ChatPanel writes. Renders filled glyphs for the active rating.
+ */
+function ThumbsRow({
+  messageIndex,
+  onRate,
+}: {
+  messageIndex: number;
+  onRate: (rating: 'up' | 'down') => void;
+}) {
+  const sessionId = useStore((s) => s.sessionId);
+  const messages = useStore((s) => s.messages);
+  const feedbackByKey = useStore((s) => s.feedbackByKey);
+
+  // Recompute target_index here so the key matches the daemon-side index
+  // used by ChatPanel.computeTargetIndex.
+  let targetIndex = -1;
+  for (let i = 0; i <= messageIndex; i++) {
+    const mm = messages[i];
+    if (!mm) break;
+    if (mm.role === 'user' || mm.role === 'assistant') targetIndex++;
+  }
+  if (!sessionId || targetIndex < 0) return null;
+  const key = `${sessionId}:${targetIndex}`;
+  const rating = feedbackByKey[key];
+
+  return (
+    <div className="chat-thumbs-row">
+      <button
+        type="button"
+        className={`chat-thumb${rating === 'up' ? ' active' : ''}`}
+        onClick={() => onRate('up')}
+        title="Helpful"
+        aria-label="Rate helpful"
+      >
+        {rating === 'up' ? '▲' : '△'}
+      </button>
+      <button
+        type="button"
+        className={`chat-thumb${rating === 'down' ? ' active' : ''}`}
+        onClick={() => onRate('down')}
+        title="Not helpful"
+        aria-label="Rate not helpful"
+      >
+        {rating === 'down' ? '▼' : '▽'}
+      </button>
     </div>
   );
 }
