@@ -144,6 +144,10 @@ pub struct SessionEntry {
     /// First 80 chars of the most recent user message in events.jsonl.
     /// Empty if the session never received a turn.
     pub last_user_msg_preview: String,
+    /// Sticky-pin marker read from `meta.json`. Pinned rows float to the
+    /// top of the list. The daemon flips this via `POST /api/sessions/
+    /// {sid}/pin`, which rewrites meta.json — so we just re-read it here.
+    pub pinned: bool,
 }
 
 fn read_meta(sdir: &Path) -> Option<serde_json::Value> {
@@ -217,6 +221,7 @@ pub fn list_sessions(sessions_root: String) -> Result<Vec<SessionEntry>, String>
             .unwrap_or(&model)
             .to_string();
         let preview = read_last_user_msg(&sdir);
+        let pinned = meta.get("pinned").and_then(|v| v.as_bool()).unwrap_or(false);
         out.push(SessionEntry {
             sid,
             started_at,
@@ -224,10 +229,15 @@ pub fn list_sessions(sessions_root: String) -> Result<Vec<SessionEntry>, String>
             provider,
             model_name,
             last_user_msg_preview: preview,
+            pinned,
         });
     }
-    // Newest first.
-    out.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+    // Pinned first, then newest first within each bucket.
+    out.sort_by(|a, b| match (a.pinned, b.pinned) {
+        (true, false) => std::cmp::Ordering::Less,
+        (false, true) => std::cmp::Ordering::Greater,
+        _ => b.started_at.cmp(&a.started_at),
+    });
     Ok(out)
 }
 

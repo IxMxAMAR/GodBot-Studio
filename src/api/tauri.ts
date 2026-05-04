@@ -43,6 +43,12 @@ export interface SessionEntry {
   provider: string;
   model_name: string;
   last_user_msg_preview: string;
+  /**
+   * Sticky-pin flag read from the session's `meta.json`. Pinned rows
+   * are sorted to the top of the SessionList. Toggled via
+   * `GodbotClient.pinSession(sid, pinned)` which rewrites the meta file.
+   */
+  pinned: boolean;
 }
 
 /** Read all session metadata from `<workspace>/.godbot-sessions/`. */

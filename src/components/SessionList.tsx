@@ -5,9 +5,9 @@ import {
   deleteSession,
   type SessionEntry,
 } from '../api/tauri';
-import { GodbotClient, type SearchHit } from '../api/godbot';
+import { GodbotClient, type SearchHit, type GodbotEvent } from '../api/godbot';
 import { DAEMON_URL } from '../api/config';
-import { CloseIcon, RefreshIcon } from './Icons';
+import { CloseIcon, RefreshIcon, StarIcon } from './Icons';
 
 const VISIBLE_LIMIT = 50;
 
@@ -44,6 +44,10 @@ export function SessionList() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<SearchHit[] | null>(null);
   const [searching, setSearching] = useState(false);
+
+  // Sid of the session currently being replayed in a modal, or null when
+  // no replay is open. Driven by the ⏵ button on each session row.
+  const [replaySid, setReplaySid] = useState<string | null>(null);
 
   const sessionsRoot = workspace ? `${workspace}/.godbot-sessions` : null;
 
@@ -147,6 +151,33 @@ export function SessionList() {
       void refresh();
     } catch (e: any) {
       setError(String(e?.message ?? e));
+    }
+  }
+
+  /**
+   * Flip the daemon-side `pinned` flag for `sid`. Optimistically reorders
+   * the local list (pinned rows float to the top) then refetches once
+   * the daemon write returns so the row re-renders from the canonical
+   * meta.json view.
+   */
+  async function onTogglePin(sid: string, currentlyPinned: boolean) {
+    if (!daemonHealthy) {
+      setError('Daemon offline — start it from the status bar first.');
+      return;
+    }
+    // Optimistic re-render: flip pinned in `entries` and resort.
+    setEntries((prev) => sortEntries(
+      prev.map((e) => (e.sid === sid ? { ...e, pinned: !currentlyPinned } : e)),
+    ));
+    try {
+      await client.pinSession(sid, !currentlyPinned);
+      void refresh();
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+      // Roll back the optimistic flip.
+      setEntries((prev) => sortEntries(
+        prev.map((e) => (e.sid === sid ? { ...e, pinned: currentlyPinned } : e)),
+      ));
     }
   }
 
@@ -271,6 +302,8 @@ export function SessionList() {
                   active={e.sid === sessionId}
                   onClick={() => switchTo(e.sid)}
                   onDelete={() => onDelete(e.sid)}
+                  onTogglePin={() => onTogglePin(e.sid, !!e.pinned)}
+                  onReplay={() => setReplaySid(e.sid)}
                 />
               ))}
               {!showAll && entries.length > VISIBLE_LIMIT && (
@@ -283,8 +316,27 @@ export function SessionList() {
           )}
         </>
       )}
+      {replaySid && (
+        <ReplayModal
+          client={client}
+          sid={replaySid}
+          onClose={() => setReplaySid(null)}
+        />
+      )}
     </div>
   );
+}
+
+/**
+ * Pinned rows float to the top of the list, otherwise newest started_at
+ * wins. Mirrors the Rust-side sort in `list_sessions` so optimistic
+ * reorders match the post-refresh order.
+ */
+function sortEntries(list: SessionEntry[]): SessionEntry[] {
+  return [...list].sort((a, b) => {
+    if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1;
+    return (b.started_at || '').localeCompare(a.started_at || '');
+  });
 }
 
 function SessionRow({
@@ -292,25 +344,47 @@ function SessionRow({
   active,
   onClick,
   onDelete,
+  onTogglePin,
+  onReplay,
 }: {
   entry: SessionEntry;
   active: boolean;
   onClick: () => void;
   onDelete: () => void;
+  onTogglePin: () => void;
+  onReplay: () => void;
 }) {
   const subtitle = entry.last_user_msg_preview || '(no messages yet)';
   const modelLabel = entry.model_name || entry.model || entry.provider || '';
+  const pinned = !!entry.pinned;
   return (
     <div
-      className={`session-row${active ? ' active' : ''}`}
+      className={`session-row${active ? ' active' : ''}${pinned ? ' pinned' : ''}`}
       onClick={onClick}
-      title={`${entry.sid}\nstarted ${entry.started_at}\n${entry.provider}/${entry.model_name}`}
+      title={`${entry.sid}\nstarted ${entry.started_at}\n${entry.provider}/${entry.model_name}${pinned ? '\n(pinned)' : ''}`}
     >
       <div className="session-row-meta">
         <span className="session-when">{shortStarted(entry.started_at)}</span>
         {modelLabel && <span className="session-model">{modelLabel}</span>}
       </div>
       <div className="session-row-preview">{subtitle}</div>
+      <button
+        className={`session-row-pin${pinned ? ' on' : ''}`}
+        onClick={(e) => { e.stopPropagation(); onTogglePin(); }}
+        title={pinned ? 'Unpin session' : 'Pin session'}
+        aria-label={pinned ? `Unpin session ${entry.sid}` : `Pin session ${entry.sid}`}
+        aria-pressed={pinned}
+      >
+        <StarIcon size={11} filled={pinned} />
+      </button>
+      <button
+        className="session-row-replay"
+        onClick={(e) => { e.stopPropagation(); onReplay(); }}
+        title="Replay session"
+        aria-label={`Replay session ${entry.sid}`}
+      >
+        <ReplayGlyph />
+      </button>
       <button
         className="session-row-delete"
         onClick={(e) => { e.stopPropagation(); onDelete(); }}
@@ -320,6 +394,18 @@ function SessionRow({
         <CloseIcon size={11} />
       </button>
     </div>
+  );
+}
+
+/** Minimal play-triangle glyph for the row-level "Replay" button. */
+function ReplayGlyph() {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg" width={11} height={11} viewBox="0 0 24 24"
+      fill="currentColor" aria-hidden
+    >
+      <polygon points="6,4 20,12 6,20" />
+    </svg>
   );
 }
 
@@ -359,4 +445,182 @@ function shortStarted(iso: string): string {
   if (!m) return iso;
   const [, , mo, d, hh, mm] = m;
   return `${mo}-${d} ${hh}:${mm}`;
+}
+
+/**
+ * Past-session playback modal. Drives `streamReplay(sid, 200)` and renders
+ * each event as a chat-bubble-style row in real time so you can scrub
+ * through what happened. ESC / × close, which aborts the SSE stream via
+ * `AbortController`. We reuse the same `chat-bubble-*` and `chat-tool-card`
+ * classes the live ChatPanel uses; that gives us styled bubbles for free
+ * with no new CSS.
+ */
+type ReplayRow =
+  | { id: string; kind: 'assistant'; text: string }
+  | { id: string; kind: 'tool_call'; name: string; argsPreview: string }
+  | { id: string; kind: 'tool_result'; preview: string }
+  | { id: string; kind: 'gate'; name: string }
+  | { id: string; kind: 'error'; text: string };
+
+function ReplayModal({
+  client,
+  sid,
+  onClose,
+}: {
+  client: GodbotClient;
+  sid: string;
+  onClose: () => void;
+}) {
+  const [rows, setRows] = useState<ReplayRow[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  // ESC closes — mirrors the StatsModal/AuditModal convention.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  // Drive the SSE replay stream. Aborts on close via the cleanup signal.
+  useEffect(() => {
+    const ctrl = new AbortController();
+    let cancel = false;
+    let bufferText = '';
+    let activeAssistantId: string | null = null;
+    (async () => {
+      try {
+        for await (const ev of client.streamReplay(sid, 200, ctrl.signal)) {
+          if (cancel) return;
+          appendFromEvent(ev);
+        }
+        if (!cancel) setDone(true);
+      } catch (e: any) {
+        if (cancel || e?.name === 'AbortError') return;
+        setError(String(e?.message ?? e));
+      }
+    })();
+
+    function appendFromEvent(ev: GodbotEvent) {
+      if (ev.type === 'token') {
+        bufferText += ev.text;
+        if (activeAssistantId) {
+          const id = activeAssistantId;
+          setRows((prev) => prev.map((r) =>
+            r.id === id && r.kind === 'assistant' ? { ...r, text: bufferText } : r,
+          ));
+        } else {
+          activeAssistantId = `asst-${rowsLen()}`;
+          const id = activeAssistantId;
+          setRows((prev) => [...prev, { id, kind: 'assistant', text: bufferText }]);
+        }
+      } else if (ev.type === 'tool_call') {
+        // Snapshot the assistant bubble (if any) and start a fresh one
+        // after the tool result lands.
+        bufferText = '';
+        activeAssistantId = null;
+        const argsPreview = Object.entries(ev.args ?? {}).slice(0, 3)
+          .map(([k, v]) => `${k}=${truncate(JSON.stringify(v), 40)}`).join(', ');
+        setRows((prev) => [...prev, { id: ev.id, kind: 'tool_call', name: ev.name, argsPreview }]);
+      } else if (ev.type === 'tool_result') {
+        setRows((prev) => [...prev, { id: `tr-${ev.id}`, kind: 'tool_result', preview: ev.preview }]);
+      } else if (ev.type === 'gate') {
+        setRows((prev) => [...prev, { id: ev.id, kind: 'gate', name: ev.name }]);
+      } else if (ev.type === 'agent_error') {
+        setRows((prev) => [...prev, { id: `err-${rowsLen()}`, kind: 'error', text: ev.message }]);
+      } else if (ev.type === 'done') {
+        setDone(true);
+      }
+    }
+
+    function rowsLen(): number {
+      // We can't read `rows` directly from inside the closure (it's
+      // closed over the initial value) — but we only use this for unique
+      // ids, and the SSE stream is sequential, so a counter via Date.now
+      // is good enough as a fallback. Keep it monotonic by mixing in the
+      // current high-res time.
+      return Math.floor(performance.now() * 1000);
+    }
+
+    return () => {
+      cancel = true;
+      try { ctrl.abort(); } catch { /* ignore */ }
+    };
+  }, [client, sid]);
+
+  // Auto-scroll the body as new rows append.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [rows.length]);
+
+  return (
+    <div className="stats-modal-backdrop" onClick={onClose}>
+      <div
+        className="stats-modal"
+        style={{ minWidth: 480, maxWidth: 720, width: '60vw' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="stats-modal-head">
+          <span>
+            Replay <code style={{ fontSize: 10 }}>{sid.slice(0, 12)}</code>
+            {done && <span style={{ marginLeft: 8, opacity: 0.6 }}>· done</span>}
+          </span>
+          <button onClick={onClose} title="Close (Esc)">×</button>
+        </div>
+        {error && <div className="stats-modal-err">{error}</div>}
+        <div
+          ref={scrollRef}
+          className="stats-modal-body"
+          style={{ maxHeight: '60vh', overflowY: 'auto' }}
+        >
+          {rows.length === 0 && !error && (
+            <div className="stats-modal-loading">replaying…</div>
+          )}
+          {rows.map((r) => {
+            if (r.kind === 'assistant') {
+              return <div key={r.id} className="chat-bubble-assistant">{r.text || '…'}</div>;
+            }
+            if (r.kind === 'tool_call') {
+              return (
+                <div key={r.id} className="chat-tool-card">
+                  <div className="head">
+                    <span>{r.name}({r.argsPreview})</span>
+                  </div>
+                </div>
+              );
+            }
+            if (r.kind === 'tool_result') {
+              return (
+                <div key={r.id} className="chat-tool-card">
+                  <div className="body">{r.preview}</div>
+                </div>
+              );
+            }
+            if (r.kind === 'gate') {
+              return (
+                <div key={r.id} className="chat-tool-card" data-group="shell">
+                  <div className="head">
+                    <span>gate · {r.name}</span>
+                  </div>
+                </div>
+              );
+            }
+            if (r.kind === 'error') {
+              return <div key={r.id} className="chat-error">{r.text}</div>;
+            }
+            return null;
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function truncate(s: string, n: number): string {
+  if (s.length <= n) return s;
+  return s.slice(0, n - 1) + '…';
 }

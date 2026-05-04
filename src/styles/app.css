@@ -367,6 +367,35 @@
   overflow: auto;
 }
 
+/* Blob-expander row at the bottom of a ToolCallCard. Surfaces appear
+ * only for results with a non-null `blob` id. */
+.chat-tool-card-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+  font-size: 10px;
+}
+.chat-tool-card-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  padding: 2px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  text-decoration: none;
+  font-size: 10px;
+}
+.chat-tool-card-btn:hover { color: var(--text); border-color: var(--text-muted); }
+.chat-tool-card-btn:disabled { opacity: 0.5; cursor: progress; }
+.chat-tool-card-err {
+  color: var(--danger);
+  font-style: italic;
+}
+
 .chat-gate-card {
   border: 1px solid var(--dangerous-tool);
   padding: 8px;
@@ -827,7 +856,7 @@
 
 .session-row {
   position: relative;
-  padding: 4px 28px 4px 18px;
+  padding: 4px 60px 4px 18px;
   cursor: pointer;
   font-size: 11px;
   color: var(--text);
@@ -883,6 +912,48 @@
 }
 .session-row:hover .session-row-delete { display: inline-flex; }
 .session-row-delete:hover { color: var(--danger); background: var(--surface); }
+
+/* Replay (▶) button — sits left of the delete (×) glyph. */
+.session-row-replay {
+  position: absolute;
+  top: 4px;
+  right: 22px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.session-row:hover .session-row-replay { display: inline-flex; }
+.session-row-replay:hover { color: var(--accent); background: var(--surface); }
+
+/* Pin star — sits left of the replay glyph. Always visible when on
+ * (so the pinned state is discoverable without hover); only revealed
+ * on hover when off so unpinned rows stay clean. */
+.session-row-pin {
+  position: absolute;
+  top: 4px;
+  right: 40px;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+}
+.session-row:hover .session-row-pin { display: inline-flex; }
+.session-row-pin.on {
+  display: inline-flex;
+  color: var(--accent);
+}
+.session-row-pin:hover { color: var(--accent); background: var(--surface); }
 
 .session-list-more {
   display: block;
@@ -1289,3 +1360,47 @@
 }
 .chat-thumb:hover { color: var(--text); background: var(--surface-2); }
 .chat-thumb.active { color: var(--accent); opacity: 1; }
+
+/* Recent-workspaces dropdown rendered inside <WorkspacePicker> when
+ * the daemon's /api/workspaces returns at least one entry. Plain
+ * vertical list of buttons; hover swaps in the surface-2 background. */
+.recent-workspaces {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--surface);
+}
+.recent-workspace-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 10px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 11px;
+  text-align: left;
+  width: 100%;
+}
+.recent-workspace-row:last-child { border-bottom: none; }
+.recent-workspace-row:hover { background: var(--surface-2); }
+.recent-workspace-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+  font-family: var(--font-mono);
+}
+.recent-workspace-meta {
+  color: var(--text-muted);
+  font-size: 10px;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}

@@ -505,7 +505,8 @@ export function ChatPanel() {
           }
           if (m.role === 'tool_call') {
             return (
-              <ToolCallCard key={m.id} name={m.toolName!} args={m.toolArgs!}
+              <ToolCallCard key={m.id} callId={m.id} sessionId={sessionId}
+                name={m.toolName!} args={m.toolArgs!}
                 result={m.toolResult} durationMs={m.duration} blob={m.blob} />
             );
           }
