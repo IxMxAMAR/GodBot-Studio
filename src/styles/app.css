@@ -146,3 +146,65 @@
 
 .status-bar .health-dot.ok { background: var(--success); }
 .status-bar .health-dot.bad { background: var(--danger); }
+
+.editor-tabs {
+  display: flex;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  height: 30px;
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.editor-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  font-size: 12px;
+  cursor: pointer;
+  border-right: 1px solid var(--border);
+  color: var(--text-muted);
+  white-space: nowrap;
+  user-select: none;
+  height: 100%;
+}
+
+.editor-tab.active {
+  color: var(--text);
+  background: var(--bg);
+}
+
+.editor-tab:hover {
+  color: var(--text);
+}
+
+.editor-tab .dirty {
+  color: var(--accent);
+}
+
+.editor-tab .close {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  font-size: 14px;
+}
+
+.editor-tab .close:hover {
+  background: var(--surface-2);
+}
+
+.editor-host {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+.editor-empty {
+  padding: 24px;
+  color: var(--text-muted);
+  text-align: center;
+}

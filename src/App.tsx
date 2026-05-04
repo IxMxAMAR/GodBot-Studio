@@ -3,6 +3,7 @@ import { ActivityBar } from './components/ActivityBar';
 import { StatusBar } from './components/StatusBar';
 import { FileTree } from './components/FileTree';
 import { WorkspacePicker } from './components/WorkspacePicker';
+import { EditorPane } from './components/EditorPane';
 import { useStore } from './state/store';
 import './styles/globals.css';
 import './styles/app.css';
@@ -24,9 +25,7 @@ export default function App() {
           {workspace ? <FileTree /> : <WorkspacePicker />}
         </div>
         <div className="center-area">
-          <div style={{ padding: 24, color: 'var(--text-muted)' }}>
-            (editor — Task 5)
-          </div>
+          <EditorPane />
         </div>
         <div className="right-sidebar">
           <div className="header">Chat</div>
