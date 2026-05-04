@@ -1,3 +1,4 @@
+import { invoke } from '@tauri-apps/api/core';
 import { pickWorkspace, listDir } from '../api/tauri';
 import { useStore } from '../state/store';
 
@@ -11,6 +12,16 @@ export function WorkspacePicker() {
     setWorkspace(path);
     const tree = await listDir(path);
     setFileTree(tree);
+    // Spawn the daemon (best-effort; chat panel will probe and recover).
+    try {
+      await invoke('spawn_daemon', {
+        pythonPath: 'C:/GodBot/.venv/Scripts/python.exe',
+        sessionsRoot: `${path}/.godbot-sessions`,
+        port: 7879,
+      });
+    } catch (e) {
+      console.error('daemon spawn failed:', e);
+    }
   }
 
   return (

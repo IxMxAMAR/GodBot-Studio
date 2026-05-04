@@ -4,6 +4,7 @@ import { StatusBar } from './components/StatusBar';
 import { FileTree } from './components/FileTree';
 import { WorkspacePicker } from './components/WorkspacePicker';
 import { EditorPane } from './components/EditorPane';
+import { ChatPanel } from './components/ChatPanel';
 import { useStore } from './state/store';
 import './styles/globals.css';
 import './styles/app.css';
@@ -29,9 +30,7 @@ export default function App() {
         </div>
         <div className="right-sidebar">
           <div className="header">Chat</div>
-          <div style={{ padding: 12, color: 'var(--text-muted)' }}>
-            (chat panel — Task 6)
-          </div>
+          <ChatPanel />
         </div>
       </div>
       <StatusBar workspace={workspace} model={modelName} daemonHealthy={daemonHealthy} />
