@@ -1,4 +1,5 @@
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { MinimizeIcon, MaximizeIcon, CloseIcon } from './Icons';
 
 const win = getCurrentWindow();
 
@@ -11,9 +12,9 @@ export function TitleBar({ workspace }: { workspace: string | null }) {
         {workspace ? `· ${workspace}` : '· no workspace'}
       </span>
       <div className="window-controls">
-        <button aria-label="Minimize" onClick={() => win.minimize().catch(console.error)}>—</button>
-        <button aria-label="Maximize" onClick={() => win.toggleMaximize().catch(console.error)}>□</button>
-        <button aria-label="Close" className="close" onClick={() => win.close().catch(console.error)}>×</button>
+        <button aria-label="Minimize" onClick={() => win.minimize().catch(console.error)}><MinimizeIcon /></button>
+        <button aria-label="Maximize" onClick={() => win.toggleMaximize().catch(console.error)}><MaximizeIcon /></button>
+        <button aria-label="Close" className="close" onClick={() => win.close().catch(console.error)}><CloseIcon /></button>
       </div>
     </div>
   );

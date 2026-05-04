@@ -1,4 +1,5 @@
 import { GodbotClient } from '../api/godbot';
+import { WarnIcon } from './Icons';
 
 export function GateCard({
   callId, name, args, sessionId, client, resolved, onResolved,
@@ -22,7 +23,7 @@ export function GateCard({
   }
   return (
     <div className="chat-gate-card">
-      <div className="head">⚠ Approve {name}?</div>
+      <div className="head"><WarnIcon /> Approve {name}?</div>
       <pre>{JSON.stringify(args, null, 2)}</pre>
       {resolved ? (
         <div className="resolved">Decision: <strong>{resolved}</strong></div>

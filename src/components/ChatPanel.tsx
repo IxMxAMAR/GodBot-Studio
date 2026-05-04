@@ -4,6 +4,7 @@ import { useStore } from '../state/store';
 import { ToolCallCard } from './ToolCallCard';
 import { GateCard } from './GateCard';
 import { DAEMON_URL } from '../api/config';
+import { StopIcon, SpinnerIcon } from './Icons';
 
 function tryExtractFinalAnswer(raw: string): string {
   try {
@@ -184,7 +185,11 @@ export function ChatPanel() {
           }
           if (m.role === 'assistant') {
             if (!m.text && !streaming) return null;
-            return <div key={m.id} className="chat-bubble-assistant">{m.text || '⏳'}</div>;
+            return (
+              <div key={m.id} className="chat-bubble-assistant">
+                {m.text || <SpinnerIcon size={14} />}
+              </div>
+            );
           }
           if (m.role === 'tool_call') {
             return (
@@ -228,7 +233,7 @@ export function ChatPanel() {
           disabled={!sessionId && !streaming}
           title={streaming ? 'Stop streaming' : 'Send'}
         >
-          {streaming ? '⏹' : 'Send'}
+          {streaming ? <StopIcon /> : 'Send'}
         </button>
       </div>
     </div>

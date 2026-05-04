@@ -2,6 +2,7 @@ import Editor, { useMonaco } from '@monaco-editor/react';
 import { useEffect } from 'react';
 import { useStore } from '../state/store';
 import { writeFileText } from '../api/tauri';
+import { CloseIcon } from './Icons';
 
 const MONACO_THEME = 'godbot-dark';
 
@@ -113,7 +114,7 @@ export function EditorPane() {
             className={`editor-tab ${f.path === activePath ? 'active' : ''}`}
             onClick={() => setActivePath(f.path)}
           >
-            <span className={f.dirty ? 'dirty' : ''}>{f.dirty ? '●' : ''}</span>
+            <span className="dirty">{f.dirty ? <span className="dirty-dot" /> : null}</span>
             <span>{f.name}</span>
             <span
               className="close"
@@ -122,7 +123,7 @@ export function EditorPane() {
                 closeFileWithConfirm(f.path);
               }}
             >
-              ×
+              <CloseIcon size={12} />
             </span>
           </div>
         ))}

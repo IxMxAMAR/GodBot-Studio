@@ -54,3 +54,75 @@ export function CloseIcon({ size = 14, className }: IconProps) {
     </svg>
   );
 }
+
+export function StopIcon({ size = 14, className }: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+      fill="currentColor" className={className}>
+      <rect x="6" y="6" width="12" height="12" rx="1.5" />
+    </svg>
+  );
+}
+
+export function MinimizeIcon({ size = 14, className }: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round"
+      className={className}>
+      <line x1="6" y1="13" x2="18" y2="13"/>
+    </svg>
+  );
+}
+
+export function MaximizeIcon({ size = 14, className }: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+      className={className}>
+      <rect x="6" y="6" width="12" height="12" rx="1"/>
+    </svg>
+  );
+}
+
+export function WarnIcon({ size = 14, className }: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round"
+      className={className}>
+      <path d="M12 2L2 21h20L12 2z"/>
+      <line x1="12" y1="10" x2="12" y2="14"/>
+      <circle cx="12" cy="17" r="0.5" fill="currentColor"/>
+    </svg>
+  );
+}
+
+export function ChevronRightIcon({ size = 12, className }: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      className={className}>
+      <polyline points="9 6 15 12 9 18"/>
+    </svg>
+  );
+}
+
+export function ChevronDownIcon({ size = 12, className }: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+      className={className}>
+      <polyline points="6 9 12 15 18 9"/>
+    </svg>
+  );
+}
+
+export function SpinnerIcon({ size = 14, className }: IconProps) {
+  return (
+    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24"
+      fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+      className={className}
+      style={{ animation: 'spin 1s linear infinite' }}>
+      <path d="M21 12a9 9 0 1 1-6.2-8.55"/>
+    </svg>
+  );
+}

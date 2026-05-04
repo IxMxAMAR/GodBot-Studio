@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { listDir, readFileText } from '../api/tauri';
 import { useStore } from '../state/store';
 import type { FileEntry } from '../state/types';
+import { ChevronRightIcon, ChevronDownIcon } from './Icons';
 
 const BINARY_EXTS = new Set([
   'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'ico', 'tif', 'tiff',
@@ -65,7 +66,6 @@ function TreeNode({ entry, depth }: NodeProps) {
     }
   }
 
-  const icon = entry.isDir ? (expanded ? '▾' : '▸') : ' ';
   return (
     <div>
       <div
@@ -88,7 +88,11 @@ function TreeNode({ entry, depth }: NodeProps) {
         onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
         onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
       >
-        <span style={{ width: 10, color: 'var(--text-muted)' }}>{icon}</span>
+        {entry.isDir ? (
+          expanded ? <ChevronDownIcon /> : <ChevronRightIcon />
+        ) : (
+          <span style={{ width: 12 }} />
+        )}
         <span>{entry.name}</span>
       </div>
       {expanded && children && (

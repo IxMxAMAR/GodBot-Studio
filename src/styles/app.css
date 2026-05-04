@@ -9,7 +9,6 @@
   align-items: center;
   background: linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%);
   border-bottom: 1px solid var(--border);
-  -webkit-app-region: drag;
   user-select: none;
   padding: 0 0 0 12px;
 }
@@ -24,7 +23,6 @@
   width: 16px;
   height: 16px;
   margin-right: 6px;
-  -webkit-app-region: drag;
 }
 
 .title-bar .workspace-label {
@@ -40,7 +38,6 @@
 
 .title-bar .window-controls {
   display: flex;
-  -webkit-app-region: no-drag;
 }
 
 .title-bar .window-controls button {
@@ -89,8 +86,13 @@
   color: var(--text-muted);
   cursor: pointer;
   font-size: 14px;
-  padding: 0 4px;
+  padding: 4px 6px;
   border-radius: 3px;
+  min-width: 24px;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .icon-btn:hover {
@@ -253,6 +255,18 @@
 
 .editor-tab .dirty {
   color: var(--accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 8px;
+}
+
+.editor-tab .dirty-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 .editor-tab .close {
@@ -366,6 +380,9 @@
   font-weight: 600;
   color: var(--dangerous-tool);
   margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .chat-gate-card pre {

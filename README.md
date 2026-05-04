@@ -56,6 +56,11 @@ For now, the Python path used to spawn the GodBot daemon is hardcoded in `src/co
 - Daemon auto-spawn on folder open
 - Status bar with daemon health
 
+## Known issues (Phase A)
+
+- File tree refresh after agent edits is best-effort — only the active workspace root is re-listed; nested folders that are currently expanded are not auto-refreshed (use the refresh button or collapse/re-expand).
+- Monaco editor adds ~3 MB to the bundle (self-hosted; no CDN load required).
+
 ## What's next (Phase B, future sessions)
 
 - Integrated terminal
