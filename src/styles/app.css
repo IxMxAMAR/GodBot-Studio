@@ -633,3 +633,34 @@
   font-style: italic;
 }
 .diff-approval-card .resolved strong { color: var(--text); }
+
+/* @-mention popup — anchored above the chat composer. */
+.mention-popup {
+  position: fixed;
+  z-index: 1000;
+  transform: translateY(-100%);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  max-height: 240px;
+  width: 320px;
+  overflow-y: auto;
+  font-size: 12px;
+  padding: 4px 0;
+}
+.mention-popup.empty { padding: 8px 12px; color: var(--text-muted); font-style: italic; }
+.mention-popup .mention-empty { padding: 4px 0; }
+.mention-popup .mention-row {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  padding: 4px 10px;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.mention-popup .mention-row.active { background: var(--accent); color: var(--bg); }
+.mention-popup .mention-row.active .mention-dir { color: var(--bg); opacity: 0.75; }
+.mention-popup .mention-name { color: var(--text); flex-shrink: 0; }
+.mention-popup .mention-dir { color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

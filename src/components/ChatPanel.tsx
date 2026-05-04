@@ -6,9 +6,11 @@ import { GateCard } from './GateCard';
 import { DiffApprovalCard } from './DiffApprovalCard';
 import { ThinkingPulse } from './ThinkingPulse';
 import { ThinkingBlock } from './ThinkingBlock';
+import { MentionPopup } from './MentionPopup';
 import { DAEMON_URL } from '../api/config';
 import { StopIcon } from './Icons';
 import { parseStreaming } from '../api/react-stream';
+import { walkWorkspace, type WalkEntry } from '../api/tauri';
 
 export function ChatPanel() {
   const client = useMemo(() => new GodbotClient(DAEMON_URL), []);
@@ -22,11 +24,48 @@ export function ChatPanel() {
   const daemonHealthy = useStore((s) => s.daemonHealthy);
   const daemonStatus = useStore((s) => s.daemonStatus);
   const conversationRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const activeAssistantIdRef = useRef<string | null>(null);
   const tokenBufferRef = useRef<string>('');
   const abortRef = useRef<AbortController | null>(null);
+
+  // @-mention picker state. `mentionStart` is the index of the `@` in
+  // `input`; `mentionQuery` is everything between that `@` and the
+  // caret (so the popup re-ranks as the user keeps typing). `null` =
+  // popup closed. Files are walked once per workspace and cached.
+  const [mentionStart, setMentionStart] = useState<number | null>(null);
+  const [mentionQuery, setMentionQuery] = useState('');
+  const [mentionAnchor, setMentionAnchor] = useState<{ left: number; top: number }>({ left: 0, top: 0 });
+  const [workspaceFiles, setWorkspaceFiles] = useState<WalkEntry[]>([]);
+  const lastWalkedWorkspace = useRef<string | null>(null);
+
+  // Walk the workspace once per workspace, cache the result. Re-walks on
+  // workspace change. The walk itself is a single Tauri call and is
+  // capped at 5000 files server-side; for typical projects it's well
+  // under 10ms and runs on a background thread inside Rust.
+  useEffect(() => {
+    if (!workspace) {
+      setWorkspaceFiles([]);
+      lastWalkedWorkspace.current = null;
+      return;
+    }
+    if (lastWalkedWorkspace.current === workspace) return;
+    let cancel = false;
+    (async () => {
+      try {
+        const files = await walkWorkspace(workspace);
+        if (!cancel) {
+          setWorkspaceFiles(files);
+          lastWalkedWorkspace.current = workspace;
+        }
+      } catch (e) {
+        console.warn('walkWorkspace failed', e);
+      }
+    })();
+    return () => { cancel = true; };
+  }, [workspace]);
 
   // Health probe loop.
   useEffect(() => {
@@ -111,7 +150,17 @@ export function ChatPanel() {
     const text = input.trim();
     if (!text) return;
     setInput('');
-    await sendText(text);
+    setMentionStart(null);
+    setMentionQuery('');
+    // Detect @-mentions and auto-prepend a read-first instruction. We
+    // strip surrounding punctuation that a user might have typed after
+    // the popup auto-inserted "@path " — the popup itself emits a
+    // trailing space, so the captured token shouldn't contain spaces.
+    const mentions = Array.from(text.matchAll(/(?:^|\s)@([^\s)\],]+)/g)).map((m) => m[1]);
+    const finalText = mentions.length
+      ? `(file context: read ${mentions.map((m) => m).join(', ')} first)\n\n${text}`
+      : text;
+    await sendText(finalText);
   }
 
   // Register a `sendChatMessage` callback in the store so the editor's
@@ -214,7 +263,93 @@ export function ChatPanel() {
     }
   }
 
+  // Sync mention state from the textarea after every input change. Looks
+  // backward from the caret for an unbroken run of non-whitespace ending
+  // at an `@`; that prefix becomes the new query. Closing the popup is
+  // handled by Esc, by typing whitespace into the query, or by
+  // backspacing past the `@`.
+  function syncMentionFromCaret(value: string, caret: number) {
+    if (!workspace) { setMentionStart(null); return; }
+    // Walk backward from caret until we hit whitespace or `@`.
+    let i = caret - 1;
+    while (i >= 0 && !/\s/.test(value[i]) && value[i] !== '@') i--;
+    if (i >= 0 && value[i] === '@') {
+      const afterAt = value.slice(i + 1, caret);
+      // No spaces inside the mention query.
+      if (!/\s/.test(afterAt)) {
+        setMentionStart(i);
+        setMentionQuery(afterAt);
+        // Anchor the popup at the textarea's top-left (good enough — the
+        // composer is small). Could be made smarter later.
+        const ta = composerRef.current;
+        if (ta) {
+          const r = ta.getBoundingClientRect();
+          setMentionAnchor({ left: r.left + 8, top: r.top - 4 });
+        }
+        return;
+      }
+    }
+    setMentionStart(null);
+    setMentionQuery('');
+  }
+
+  function onChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
+    const value = e.target.value;
+    setInput(value);
+    syncMentionFromCaret(value, e.target.selectionStart);
+  }
+
+  function pickMention(rel: string) {
+    if (mentionStart === null) return;
+    const before = input.slice(0, mentionStart);
+    const ta = composerRef.current;
+    const caret = ta?.selectionStart ?? input.length;
+    const after = input.slice(caret);
+    // Insert the relative path verbatim where the @-fragment was, plus a
+    // trailing space so the user can keep typing.
+    const inserted = `@${rel} `;
+    const next = before + inserted + after;
+    setInput(next);
+    setMentionStart(null);
+    setMentionQuery('');
+    // Restore focus + place caret after the inserted path.
+    setTimeout(() => {
+      const t = composerRef.current;
+      if (t) {
+        const pos = before.length + inserted.length;
+        t.focus();
+        t.setSelectionRange(pos, pos);
+      }
+    }, 0);
+  }
+
   function onKeyDown(e: React.KeyboardEvent) {
+    // While the mention popup is open, intercept navigation keys and
+    // forward them as a custom event. Lets the popup own selection
+    // logic without stealing focus from the textarea.
+    if (mentionStart !== null) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('mention-popup-key', { detail: 'down' }));
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('mention-popup-key', { detail: 'up' }));
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent('mention-popup-key', { detail: 'enter' }));
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setMentionStart(null);
+        setMentionQuery('');
+        return;
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       send();
@@ -307,12 +442,34 @@ export function ChatPanel() {
       </div>
       <div className="chat-composer">
         <textarea
+          ref={composerRef}
           value={input}
-          onChange={(e) => setInput(e.target.value)}
+          onChange={onChange}
           onKeyDown={onKeyDown}
+          onBlur={() => {
+            // Close the popup on blur, but keep the lid open if focus is
+            // moving INTO the popup itself (handled by its onMouseDown
+            // preventing focus loss). 100ms delay so the click handler
+            // can land before we tear it down.
+            setTimeout(() => {
+              if (document.activeElement !== composerRef.current) {
+                setMentionStart(null);
+                setMentionQuery('');
+              }
+            }, 100);
+          }}
           placeholder={placeholder}
           disabled={disabled}
         />
+        {mentionStart !== null && (
+          <MentionPopup
+            files={workspaceFiles}
+            query={mentionQuery}
+            anchor={mentionAnchor}
+            onPick={pickMention}
+            onCancel={() => { setMentionStart(null); setMentionQuery(''); }}
+          />
+        )}
         <button
           onClick={() => {
             if (streaming) {

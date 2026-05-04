@@ -14,6 +14,7 @@ pub fn run() {
             fs::list_dir,
             fs::read_file,
             fs::write_file,
+            fs::walk_workspace,
             daemon::spawn_daemon,
             daemon::check_daemon_health,
         ])
