@@ -36,6 +36,8 @@ interface State {
   appendMessage: (m: ChatMessage) => void;
   updateMessage: (id: string, patch: Partial<ChatMessage>) => void;
   clearChat: () => void;
+  /** Replace the entire message log — used when switching to an existing session. */
+  setMessages: (msgs: ChatMessage[]) => void;
 
   // Daemon
   daemonHealthy: boolean;
@@ -118,6 +120,7 @@ export const useStore = create<State>()(
     messages: s.messages.map((m) => (m.id === id ? { ...m, ...patch } : m)),
   })),
   clearChat: () => set({ messages: [] }),
+  setMessages: (msgs) => set({ messages: msgs }),
 
   daemonHealthy: false,
   modelName: '',

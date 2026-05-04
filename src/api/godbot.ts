@@ -13,6 +13,45 @@ export interface AgentErrorEvent { type: 'agent_error'; message: string; recover
 export interface DoneEvent { type: 'done'; step_count: number; }
 export type GodbotEvent = TokenEvent | ToolCallEvent | ToolResultEvent | GateEvent | AgentErrorEvent | DoneEvent;
 
+/** Response shape from GET /api/sessions/{sid}. */
+export interface SessionInfo {
+  id: string;
+  model: string;
+  provider?: string;
+  model_name?: string;
+  protocol?: string | null;
+  /** LLM-format message log: `[{role: 'user'|'assistant', content: string}, ...]` */
+  messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
+  yolo?: boolean;
+  workspace_root?: string | null;
+  auto_approve_in_sandbox?: boolean;
+}
+
+/** GET /api/providers — added in sub-project 7. */
+export interface ProviderInfo {
+  name: string;
+  configured: boolean;
+  registered: boolean;
+  default_model: string;
+  base_url: string;
+  has_api_key: boolean;
+}
+export interface ProvidersResponse {
+  default: string;
+  providers: ProviderInfo[];
+}
+
+/** GET /api/providers/{name}/models. */
+export interface ModelEntry {
+  id: string;
+  context_length?: number;
+  supports_native_tools?: boolean;
+}
+export interface ModelsResponse {
+  models: ModelEntry[];
+  error?: string;
+}
+
 export class GodbotClient {
   constructor(public baseUrl = 'http://127.0.0.1:7879') {
     this.baseUrl = baseUrl.replace(/\/$/, '');
@@ -27,7 +66,7 @@ export class GodbotClient {
     }
   }
 
-  async getSession(sid: string): Promise<{ model?: string } | null> {
+  async getSession(sid: string): Promise<SessionInfo | null> {
     try {
       const r = await fetch(`${this.baseUrl}/api/sessions/${sid}`);
       if (!r.ok) return null;
@@ -35,6 +74,18 @@ export class GodbotClient {
     } catch {
       return null;
     }
+  }
+
+  async listProviders(): Promise<ProvidersResponse> {
+    const r = await fetch(`${this.baseUrl}/api/providers`);
+    if (!r.ok) throw new Error(`listProviders ${r.status}`);
+    return await r.json();
+  }
+
+  async listModels(provider: string): Promise<ModelsResponse> {
+    const r = await fetch(`${this.baseUrl}/api/providers/${encodeURIComponent(provider)}/models`);
+    if (!r.ok) throw new Error(`listModels ${r.status}`);
+    return await r.json();
   }
 
   async newSession(workspace?: string, autoApprove = true): Promise<string> {

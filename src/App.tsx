@@ -7,6 +7,7 @@ import { EditorPane } from './components/EditorPane';
 import { ChatPanel } from './components/ChatPanel';
 import { Splitter } from './components/Splitter';
 import { SettingsPanel } from './components/SettingsPanel';
+import { SessionList } from './components/SessionList';
 import { RefreshIcon, CloseIcon } from './components/Icons';
 import { useStore } from './state/store';
 import './styles/globals.css';
@@ -65,7 +66,12 @@ export default function App() {
                 </div>
               )}
             </div>
-            {workspace ? <FileTree /> : <WorkspacePicker />}
+            {workspace ? (
+              <div className="left-sidebar-scroll">
+                <SessionList />
+                <FileTree />
+              </div>
+            ) : <WorkspacePicker />}
           </div>
         )}
         {showLeft && <Splitter side="left" onResize={setLeftWidth} />}

@@ -15,6 +15,9 @@ pub fn run() {
             fs::read_file,
             fs::write_file,
             fs::walk_workspace,
+            fs::list_sessions,
+            fs::delete_session,
+            fs::validate_python,
             daemon::spawn_daemon,
             daemon::check_daemon_health,
         ])

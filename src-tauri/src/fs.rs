@@ -1,6 +1,7 @@
 use serde::Serialize;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::process::Command;
 
 #[derive(Serialize)]
 pub struct FileEntry {
@@ -129,4 +130,167 @@ pub fn walk_workspace(path: String) -> Result<Vec<WalkEntry>, String> {
     walk_into(&root, &root, &mut out);
     out.sort_by(|a, b| a.rel.to_lowercase().cmp(&b.rel.to_lowercase()));
     Ok(out)
+}
+
+#[derive(Serialize)]
+pub struct SessionEntry {
+    pub sid: String,
+    pub started_at: String,
+    /// The legacy "model" field. Older sessions wrote this; newer
+    /// sessions populate `provider`/`model_name` separately.
+    pub model: String,
+    pub provider: String,
+    pub model_name: String,
+    /// First 80 chars of the most recent user message in events.jsonl.
+    /// Empty if the session never received a turn.
+    pub last_user_msg_preview: String,
+}
+
+fn read_meta(sdir: &Path) -> Option<serde_json::Value> {
+    let raw = fs::read_to_string(sdir.join("meta.json")).ok()?;
+    serde_json::from_str(&raw).ok()
+}
+
+fn read_last_user_msg(sdir: &Path) -> String {
+    let path = sdir.join("events.jsonl");
+    let raw = match fs::read_to_string(&path) {
+        Ok(s) => s,
+        Err(_) => return String::new(),
+    };
+    let mut last = String::new();
+    for line in raw.lines() {
+        let line = line.trim();
+        if line.is_empty() {
+            continue;
+        }
+        let v: serde_json::Value = match serde_json::from_str(line) {
+            Ok(v) => v,
+            Err(_) => continue,
+        };
+        if v.get("type").and_then(|t| t.as_str()) == Some("user") {
+            if let Some(c) = v.get("content").and_then(|c| c.as_str()) {
+                last = c.to_string();
+            }
+        }
+    }
+    // Truncate + strip newlines for a single-line preview.
+    let collapsed: String = last.chars().map(|c| if c == '\n' || c == '\r' { ' ' } else { c }).collect();
+    if collapsed.chars().count() > 80 {
+        collapsed.chars().take(80).collect::<String>() + "…"
+    } else {
+        collapsed
+    }
+}
+
+/// List sessions stored under `<workspace>/.godbot-sessions/`. Returns a
+/// list sorted newest-first by started_at. Each entry is a parsed view
+/// of the session's `meta.json` plus a 1-line preview of the last user
+/// message from `events.jsonl`. The daemon owns the canonical reader
+/// (`Session.load`), but reading from Rust avoids a daemon round-trip
+/// for what's effectively a directory scan.
+#[tauri::command]
+pub fn list_sessions(sessions_root: String) -> Result<Vec<SessionEntry>, String> {
+    let root = PathBuf::from(&sessions_root);
+    if !root.exists() {
+        return Ok(Vec::new());
+    }
+    if !root.is_dir() {
+        return Err(format!("not a directory: {}", sessions_root));
+    }
+    let mut out = Vec::new();
+    let entries = fs::read_dir(&root).map_err(|e| e.to_string())?;
+    for entry in entries.flatten() {
+        let sdir = entry.path();
+        if !sdir.is_dir() {
+            continue;
+        }
+        let sid = entry.file_name().to_string_lossy().to_string();
+        let meta = match read_meta(&sdir) {
+            Some(m) => m,
+            None => continue,
+        };
+        let started_at = meta.get("started_at").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let model = meta.get("model").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let provider = meta.get("provider").and_then(|v| v.as_str()).unwrap_or("").to_string();
+        let model_name = meta
+            .get("model_name").and_then(|v| v.as_str())
+            .unwrap_or(&model)
+            .to_string();
+        let preview = read_last_user_msg(&sdir);
+        out.push(SessionEntry {
+            sid,
+            started_at,
+            model,
+            provider,
+            model_name,
+            last_user_msg_preview: preview,
+        });
+    }
+    // Newest first.
+    out.sort_by(|a, b| b.started_at.cmp(&a.started_at));
+    Ok(out)
+}
+
+#[derive(Serialize)]
+pub struct PythonValidation {
+    pub ok: bool,
+    pub version: String,
+    pub error: Option<String>,
+}
+
+/// Run `<path> --version` to confirm the Python interpreter is callable
+/// and report its version string. Used by the Settings panel to
+/// validate the python_path field before the user saves it.
+#[tauri::command]
+pub fn validate_python(path: String) -> PythonValidation {
+    if path.trim().is_empty() {
+        return PythonValidation { ok: false, version: String::new(), error: Some("empty path".into()) };
+    }
+    let p = PathBuf::from(&path);
+    if !p.exists() {
+        return PythonValidation { ok: false, version: String::new(), error: Some(format!("not found: {}", path)) };
+    }
+    let mut cmd = Command::new(&p);
+    cmd.arg("--version");
+    #[cfg(target_os = "windows")]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x08000000;
+        cmd.creation_flags(CREATE_NO_WINDOW);
+    }
+    match cmd.output() {
+        Ok(o) if o.status.success() => {
+            // Python prints to stdout (3.4+) — older versions used stderr.
+            let mut combined = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if combined.is_empty() {
+                combined = String::from_utf8_lossy(&o.stderr).trim().to_string();
+            }
+            PythonValidation { ok: true, version: combined, error: None }
+        }
+        Ok(o) => {
+            let err = String::from_utf8_lossy(&o.stderr).trim().to_string();
+            PythonValidation { ok: false, version: String::new(), error: Some(err) }
+        }
+        Err(e) => PythonValidation { ok: false, version: String::new(), error: Some(e.to_string()) },
+    }
+}
+
+/// Permanently delete a session directory under sessions_root. The
+/// caller is responsible for confirming with the user; we just recurse.
+#[tauri::command]
+pub fn delete_session(sessions_root: String, sid: String) -> Result<(), String> {
+    // Refuse anything with a path separator in `sid` to keep this from
+    // escaping the sessions root.
+    if sid.contains('/') || sid.contains('\\') || sid.contains("..") || sid.is_empty() {
+        return Err(format!("invalid session id: {}", sid));
+    }
+    let root = PathBuf::from(&sessions_root);
+    let sdir = root.join(&sid);
+    if !sdir.exists() {
+        return Ok(());
+    }
+    if !sdir.is_dir() {
+        return Err(format!("not a directory: {}", sdir.display()));
+    }
+    fs::remove_dir_all(&sdir).map_err(|e| e.to_string())
 }

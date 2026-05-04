@@ -35,3 +35,33 @@ export async function writeFileText(path: string, content: string): Promise<void
 export async function walkWorkspace(path: string): Promise<WalkEntry[]> {
   return await invoke<WalkEntry[]>('walk_workspace', { path });
 }
+
+export interface SessionEntry {
+  sid: string;
+  started_at: string;
+  model: string;
+  provider: string;
+  model_name: string;
+  last_user_msg_preview: string;
+}
+
+/** Read all session metadata from `<workspace>/.godbot-sessions/`. */
+export async function listSessions(sessionsRoot: string): Promise<SessionEntry[]> {
+  return await invoke<SessionEntry[]>('list_sessions', { sessionsRoot });
+}
+
+/** Permanently delete a session directory. Caller must confirm. */
+export async function deleteSession(sessionsRoot: string, sid: string): Promise<void> {
+  await invoke('delete_session', { sessionsRoot, sid });
+}
+
+export interface PythonValidation {
+  ok: boolean;
+  version: string;
+  error: string | null;
+}
+
+/** Run `<path> --version` and report the result. Used by Settings. */
+export async function validatePython(path: string): Promise<PythonValidation> {
+  return await invoke<PythonValidation>('validate_python', { path });
+}
