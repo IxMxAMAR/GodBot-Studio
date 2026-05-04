@@ -3,8 +3,7 @@ import { GodbotClient, GodbotEvent } from '../api/godbot';
 import { useStore } from '../state/store';
 import { ToolCallCard } from './ToolCallCard';
 import { GateCard } from './GateCard';
-
-const DAEMON_PORT = 7879;
+import { DAEMON_URL } from '../api/config';
 
 function tryExtractFinalAnswer(raw: string): string {
   try {
@@ -17,7 +16,7 @@ function tryExtractFinalAnswer(raw: string): string {
 }
 
 export function ChatPanel() {
-  const client = useMemo(() => new GodbotClient(`http://127.0.0.1:${DAEMON_PORT}`), []);
+  const client = useMemo(() => new GodbotClient(DAEMON_URL), []);
   const sessionId = useStore((s) => s.sessionId);
   const setSessionId = useStore((s) => s.setSessionId);
   const messages = useStore((s) => s.messages);
@@ -25,40 +24,45 @@ export function ChatPanel() {
   const updateMessage = useStore((s) => s.updateMessage);
   const setDaemonHealth = useStore((s) => s.setDaemonHealth);
   const workspace = useStore((s) => s.workspace);
+  const daemonHealthy = useStore((s) => s.daemonHealthy);
   const conversationRef = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
-  const [, setPendingAssistantId] = useState<string | null>(null);
+  const activeAssistantIdRef = useRef<string | null>(null);
   const tokenBufferRef = useRef<string>('');
 
   // Health probe loop.
   useEffect(() => {
     let cancel = false;
     async function probe() {
-      const ok = await client.health();
-      if (!cancel) setDaemonHealth(ok);
+      const info = await client.health();
+      if (!cancel) setDaemonHealth(info.ok);
+      if (info.model) useStore.getState().setModel(info.model);
     }
     const id = setInterval(probe, 5000);
     probe();
     return () => { cancel = true; clearInterval(id); };
   }, [client, setDaemonHealth]);
 
-  // Create a session when workspace is set.
+  // Create a session when workspace is set AND daemon is healthy. Retry on either change.
   useEffect(() => {
-    if (sessionId || !workspace) return;
+    if (sessionId || !workspace || !daemonHealthy) return;
     let cancel = false;
     (async () => {
       try {
-        if (await client.health()) {
-          const sid = await client.newSession(workspace, true);
-          if (!cancel) setSessionId(sid);
-        }
-      } catch (e) {
-        console.error('newSession failed', e);
+        const sid = await client.newSession(workspace, true);
+        if (!cancel) setSessionId(sid);
+      } catch (e: any) {
+        // Surface to chat as an error message; the user has no other recovery path.
+        useStore.getState().appendMessage({
+          id: crypto.randomUUID(),
+          role: 'error',
+          text: `Couldn't start session: ${e?.message ?? e}`,
+        });
       }
     })();
     return () => { cancel = true; };
-  }, [client, workspace, sessionId, setSessionId]);
+  }, [client, workspace, sessionId, daemonHealthy, setSessionId]);
 
   // Auto-scroll on new message.
   useEffect(() => {
@@ -73,28 +77,32 @@ export function ChatPanel() {
     appendMessage({ id: crypto.randomUUID(), role: 'user', text });
     const assistantId = crypto.randomUUID();
     appendMessage({ id: assistantId, role: 'assistant', text: '⏳ thinking…' });
-    setPendingAssistantId(assistantId);
+    activeAssistantIdRef.current = assistantId;
     tokenBufferRef.current = '';
     setStreaming(true);
     try {
       await client.send(sessionId, text);
       for await (const ev of client.stream(sessionId)) {
-        handleEvent(ev, assistantId);
+        handleEvent(ev);
       }
     } catch (e: any) {
       appendMessage({ id: crypto.randomUUID(), role: 'error', text: String(e?.message ?? e) });
     } finally {
       setStreaming(false);
-      setPendingAssistantId(null);
+      activeAssistantIdRef.current = null;
     }
   }
 
-  function handleEvent(ev: GodbotEvent, assistantId: string) {
+  function handleEvent(ev: GodbotEvent) {
     if (ev.type === 'token') {
       tokenBufferRef.current += ev.text;
-      updateMessage(assistantId, { text: tokenBufferRef.current });
+      if (activeAssistantIdRef.current) {
+        updateMessage(activeAssistantIdRef.current, { text: tokenBufferRef.current });
+      }
     } else if (ev.type === 'tool_call') {
-      updateMessage(assistantId, { text: tokenBufferRef.current || '' });
+      if (activeAssistantIdRef.current) {
+        updateMessage(activeAssistantIdRef.current, { text: tokenBufferRef.current || '' });
+      }
       appendMessage({
         id: ev.id, role: 'tool_call', text: '',
         toolName: ev.name, toolArgs: ev.args,
@@ -103,7 +111,7 @@ export function ChatPanel() {
       tokenBufferRef.current = '';
       const newAssistantId = crypto.randomUUID();
       appendMessage({ id: newAssistantId, role: 'assistant', text: '' });
-      setPendingAssistantId(newAssistantId);
+      activeAssistantIdRef.current = newAssistantId;
     } else if (ev.type === 'tool_result') {
       updateMessage(ev.id, {
         toolResult: ev.preview,
@@ -120,10 +128,8 @@ export function ChatPanel() {
     } else if (ev.type === 'done') {
       // Try to parse the buffered text as JSON ReAct and unwrap final_answer.
       const finalText = tryExtractFinalAnswer(tokenBufferRef.current);
-      const lastAssistantId = useStore.getState().messages
-        .filter((m) => m.role === 'assistant').slice(-1)[0]?.id;
-      if (lastAssistantId) {
-        updateMessage(lastAssistantId, { text: finalText || '(empty reply)' });
+      if (activeAssistantIdRef.current) {
+        updateMessage(activeAssistantIdRef.current, { text: finalText || '(empty reply)' });
       }
     }
   }
@@ -134,6 +140,17 @@ export function ChatPanel() {
       send();
     }
   }
+
+  const placeholder = !workspace
+    ? "Open a folder first."
+    : !daemonHealthy
+      ? "Daemon offline — check the status bar."
+      : !sessionId
+        ? "Starting session…"
+        : streaming
+          ? "Streaming… (use Stop to cancel)"
+          : "type a message...";
+  const disabled = !sessionId || streaming;
 
   return (
     <div className="chat-panel">
@@ -171,11 +188,15 @@ export function ChatPanel() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKeyDown}
-          placeholder={sessionId ? "type a message..." : "Open a folder first."}
-          disabled={!sessionId || streaming}
+          placeholder={placeholder}
+          disabled={disabled}
         />
-        <button onClick={send} disabled={!sessionId || streaming}>
-          {streaming ? '...' : 'Send'}
+        <button
+          onClick={() => streaming ? sessionId && client.stop(sessionId).catch(console.error) : send()}
+          disabled={!sessionId && !streaming}
+          title={streaming ? 'Stop streaming' : 'Send'}
+        >
+          {streaming ? '⏹' : 'Send'}
         </button>
       </div>
     </div>

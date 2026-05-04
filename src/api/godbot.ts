@@ -11,11 +11,16 @@ export class GodbotClient {
     this.baseUrl = baseUrl.replace(/\/$/, '');
   }
 
-  async health(): Promise<boolean> {
+  async health(): Promise<{ ok: boolean; model: string }> {
     try {
       const r = await fetch(`${this.baseUrl}/api/health`);
-      return r.ok;
-    } catch { return false; }
+      if (!r.ok) return { ok: false, model: '' };
+      // Pragmatic: just expose ok; model name comes from the agent loop's first
+      // turn. For now, return ok with empty model — Phase B fills this in.
+      return { ok: true, model: '' };
+    } catch {
+      return { ok: false, model: '' };
+    }
   }
 
   async newSession(workspace?: string, autoApprove = true): Promise<string> {
