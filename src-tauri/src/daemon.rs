@@ -17,10 +17,16 @@ pub async fn spawn_daemon(
     sessions_root: String,
     port: u16,
 ) -> Result<(), String> {
-    // If already alive, return.
-    if let Ok(g) = state.child.lock() {
-        if g.is_some() {
-            return Ok(());
+    // If we have a child handle, check if it's still alive.
+    {
+        let mut g = state.child.lock().map_err(|e| e.to_string())?;
+        if let Some(child) = g.as_mut() {
+            match child.try_wait() {
+                Ok(None) => return Ok(()), // still alive
+                _ => {
+                    *g = None; // dead — fall through to respawn
+                }
+            }
         }
     }
 
@@ -75,7 +81,14 @@ pub fn kill_daemon(state: &DaemonState) {
     if let Ok(mut g) = state.child.lock() {
         if let Some(mut child) = g.take() {
             let _ = child.kill();
-            let _ = child.wait();
+            // Bounded poll — never block the UI thread.
+            for _ in 0..20 {
+                match child.try_wait() {
+                    Ok(Some(_)) => return,
+                    _ => std::thread::sleep(std::time::Duration::from_millis(50)),
+                }
+            }
+            // Give up; OS reaps when our process exits.
         }
     }
 }

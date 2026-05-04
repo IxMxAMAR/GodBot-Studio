@@ -17,12 +17,13 @@ pub fn run() {
             daemon::spawn_daemon,
             daemon::check_daemon_health,
         ])
-        .on_window_event(|window, event| {
-            if let tauri::WindowEvent::Destroyed = event {
+        .on_window_event(|window, event| match event {
+            tauri::WindowEvent::CloseRequested { .. } | tauri::WindowEvent::Destroyed => {
                 if let Some(state) = window.app_handle().try_state::<DaemonState>() {
                     daemon::kill_daemon(&state);
                 }
             }
+            _ => {}
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
