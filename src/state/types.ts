@@ -22,6 +22,8 @@ export interface ChatMessage {
   toolResult?: string;
   duration?: number;
   blob?: string | null;
+  resolved?: 'allow' | 'always' | 'deny';
+  pending?: boolean;
 }
 
 export type ActivityKind = 'files' | 'chat' | 'settings';

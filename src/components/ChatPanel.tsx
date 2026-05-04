@@ -173,7 +173,8 @@ export function ChatPanel() {
               <GateCard
                 key={m.id} callId={m.id} name={m.toolName!} args={m.toolArgs!}
                 sessionId={sessionId!} client={client}
-                onResolved={() => updateMessage(m.id, { text: '(resolved)' })}
+                resolved={m.resolved}
+                onResolved={(decision) => updateMessage(m.id, { resolved: decision })}
               />
             );
           }
