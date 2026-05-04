@@ -1,14 +1,13 @@
 import { FilesIcon, ChatIcon, SettingsIcon } from './Icons';
+import { useStore } from '../state/store';
 import type { ActivityKind } from '../state/types';
 
 export function ActivityBar({
   active, onPick,
 }: { active: ActivityKind; onPick: (k: ActivityKind) => void }) {
-  function focusChat() {
-    // Focus the chat textarea without changing activity (keeps file tree visible).
-    const ta = document.querySelector('.chat-composer textarea') as HTMLTextAreaElement | null;
-    ta?.focus();
-  }
+  const showChat = useStore((s) => s.showChat);
+  const toggleChat = useStore((s) => s.toggleChat);
+
   return (
     <div className="activity-bar">
       <button
@@ -20,9 +19,10 @@ export function ActivityBar({
         <FilesIcon />
       </button>
       <button
-        onClick={focusChat}
-        title="Focus chat (Ctrl+L)"
-        aria-label="Focus chat"
+        className={showChat ? 'active' : ''}
+        onClick={toggleChat}
+        title={showChat ? 'Hide chat panel' : 'Show chat panel'}
+        aria-label={showChat ? 'Hide chat' : 'Show chat'}
       >
         <ChatIcon />
       </button>

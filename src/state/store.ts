@@ -26,6 +26,8 @@ interface State {
   rightWidth: number;
   setLeftWidth: (n: number) => void;
   setRightWidth: (n: number) => void;
+  showChat: boolean;
+  toggleChat: () => void;
 
   // Chat
   sessionId: string | null;
@@ -100,6 +102,8 @@ export const useStore = create<State>()(
   rightWidth: 320,
   setLeftWidth: (n) => set({ leftWidth: n }),
   setRightWidth: (n) => set({ rightWidth: n }),
+  showChat: true,
+  toggleChat: () => set((s) => ({ showChat: !s.showChat })),
 
   sessionId: null,
   setSessionId: (sid) => set({ sessionId: sid }),
@@ -123,6 +127,7 @@ export const useStore = create<State>()(
       partialize: (state) => ({
         leftWidth: state.leftWidth,
         rightWidth: state.rightWidth,
+        showChat: state.showChat,
       }),
     }
   )

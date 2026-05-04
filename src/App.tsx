@@ -6,6 +6,7 @@ import { WorkspacePicker } from './components/WorkspacePicker';
 import { EditorPane } from './components/EditorPane';
 import { ChatPanel } from './components/ChatPanel';
 import { Splitter } from './components/Splitter';
+import { SettingsPanel } from './components/SettingsPanel';
 import { RefreshIcon, CloseIcon } from './components/Icons';
 import { useStore } from './state/store';
 import './styles/globals.css';
@@ -19,23 +20,20 @@ export default function App() {
   const rightWidth = useStore((s) => s.rightWidth);
   const setLeftWidth = useStore((s) => s.setLeftWidth);
   const setRightWidth = useStore((s) => s.setRightWidth);
+  const showChat = useStore((s) => s.showChat);
 
   const showLeft = activity === 'files';
   const showSettings = activity === 'settings';
 
-  // Grid columns: activity-bar | (left-sidebar splitter)? | center | splitter | right-sidebar
-  const gridTemplateColumns = showLeft
-    ? `44px ${leftWidth}px 4px 1fr 4px ${rightWidth}px`
-    : `44px 1fr 4px ${rightWidth}px`;
+  // Grid columns: activity-bar | (left-sidebar splitter)? | center | (splitter right-sidebar)?
+  const left = showLeft ? `${leftWidth}px 4px ` : '';
+  const right = showChat ? ` 4px ${rightWidth}px` : '';
+  const gridTemplateColumns = `44px ${left}1fr${right}`;
 
   return (
     <div className="app-root">
       <TitleBar workspace={workspace} />
-      <div
-        className="main-area"
-        data-show-left={showLeft}
-        style={{ gridTemplateColumns }}
-      >
+      <div className="main-area" style={{ gridTemplateColumns }}>
         <ActivityBar active={activity} onPick={setActivity} />
         {showLeft && (
           <div className="left-sidebar">
@@ -72,21 +70,15 @@ export default function App() {
         )}
         {showLeft && <Splitter side="left" onResize={setLeftWidth} />}
         <div className="center-area">
-          {showSettings ? (
-            <div style={{ padding: 32, color: 'var(--text-muted)' }}>
-              <h2 style={{ marginTop: 0, color: 'var(--text)' }}>Settings</h2>
-              <p>UI for Python path, daemon port, theme, and keybindings ships in Phase B.</p>
-              <p>For now, edit <code>src/api/config.ts</code> to change the Python path used to spawn the daemon.</p>
-            </div>
-          ) : (
-            <EditorPane />
-          )}
+          {showSettings ? <SettingsPanel /> : <EditorPane />}
         </div>
-        <Splitter side="right" onResize={setRightWidth} />
-        <div className="right-sidebar">
-          <div className="header">Chat</div>
-          <ChatPanel />
-        </div>
+        {showChat && <Splitter side="right" onResize={setRightWidth} />}
+        {showChat && (
+          <div className="right-sidebar">
+            <div className="header">Chat</div>
+            <ChatPanel />
+          </div>
+        )}
       </div>
       <StatusBar />
     </div>

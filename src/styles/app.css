@@ -460,3 +460,24 @@
 .chat-gate-card button {
   transition: background 120ms ease, color 120ms ease, opacity 120ms ease;
 }
+
+/* Settings panel */
+.settings-panel {
+  padding: 32px 40px;
+  color: var(--text);
+  overflow-y: auto;
+  height: 100%;
+  max-width: 720px;
+}
+.settings-panel h2 { margin: 0 0 8px 0; font-weight: 600; color: var(--accent); }
+.settings-panel h3 { margin: 24px 0 8px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+.settings-panel .settings-blurb { color: var(--text-muted); font-size: 12px; margin: 0 0 16px 0; }
+.settings-panel section { margin-bottom: 12px; }
+.settings-panel table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.settings-panel td { padding: 4px 8px; vertical-align: top; }
+.settings-panel td:first-child { color: var(--text-muted); width: 160px; }
+.settings-panel code { background: var(--surface-2); padding: 1px 6px; border-radius: 3px; font-family: var(--font-mono); font-size: 11px; }
+.settings-panel kbd { background: var(--surface-2); border: 1px solid var(--border); border-radius: 3px; padding: 1px 6px; font-family: var(--font-mono); font-size: 11px; margin-right: 2px; }
+.settings-panel .hint { color: var(--text-muted); font-size: 11px; margin-top: 6px; }
+.settings-panel .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
+.settings-panel .error-cell { color: var(--danger); font-family: var(--font-mono); font-size: 11px; }
