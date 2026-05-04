@@ -101,7 +101,11 @@ export function SessionList() {
       return;
     }
     try {
-      const sid = await client.newSession(workspace, true);
+      const { defaultProvider, defaultModel, autoApprove } = useStore.getState();
+      const sid = await client.newSession(workspace, autoApprove, {
+        provider: defaultProvider || undefined,
+        model: defaultModel || undefined,
+      });
       clearChat();
       setSessionId(sid);
       const info = await client.getSession(sid);

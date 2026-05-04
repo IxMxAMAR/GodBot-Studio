@@ -85,7 +85,11 @@ export function ChatPanel() {
     let cancel = false;
     (async () => {
       try {
-        const sid = await client.newSession(workspace, true);
+        const { defaultProvider, defaultModel, autoApprove } = useStore.getState();
+        const sid = await client.newSession(workspace, autoApprove, {
+          provider: defaultProvider || undefined,
+          model: defaultModel || undefined,
+        });
         if (cancel) return;
         setSessionId(sid);
         const info = await client.getSession(sid);

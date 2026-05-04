@@ -48,6 +48,22 @@ interface State {
   setModel: (name: string) => void;
   setDaemonStatus: (s: State['daemonStatus'], err?: string | null) => void;
 
+  // Settings (persisted)
+  theme: 'dark' | 'light';
+  setTheme: (t: 'dark' | 'light') => void;
+  /** User-overridden Python interpreter path. Empty = use compile-time default. */
+  pythonPath: string;
+  setPythonPath: (p: string) => void;
+  /** Default provider to use when starting a new session. Empty = daemon's default. */
+  defaultProvider: string;
+  setDefaultProvider: (p: string) => void;
+  /** Default model id within `defaultProvider`. Empty = provider's default. */
+  defaultModel: string;
+  setDefaultModel: (m: string) => void;
+  /** Whether new sessions start with auto_approve_in_sandbox=true. */
+  autoApprove: boolean;
+  setAutoApprove: (a: boolean) => void;
+
   // Chat actions exposed from outside the chat panel.
   // Set by ChatPanel on mount; called by EditorPane's context-menu actions.
   sendChatMessage: ((text: string) => void) | null;
@@ -130,6 +146,19 @@ export const useStore = create<State>()(
   setModel: (name) => set({ modelName: name }),
   setDaemonStatus: (s, err = null) => set({ daemonStatus: s, daemonError: err }),
 
+  // Default theme follows the OS — picked up at first paint when the
+  // store hydrates an empty value. App.tsx owns reading prefers-color-scheme.
+  theme: 'dark',
+  setTheme: (t) => set({ theme: t }),
+  pythonPath: '',
+  setPythonPath: (p) => set({ pythonPath: p }),
+  defaultProvider: '',
+  setDefaultProvider: (p) => set({ defaultProvider: p }),
+  defaultModel: '',
+  setDefaultModel: (m) => set({ defaultModel: m }),
+  autoApprove: true,
+  setAutoApprove: (a) => set({ autoApprove: a }),
+
   sendChatMessage: null,
   setSendChatMessage: (fn) => set({ sendChatMessage: fn }),
     }),
@@ -139,6 +168,11 @@ export const useStore = create<State>()(
         leftWidth: state.leftWidth,
         rightWidth: state.rightWidth,
         showChat: state.showChat,
+        theme: state.theme,
+        pythonPath: state.pythonPath,
+        defaultProvider: state.defaultProvider,
+        defaultModel: state.defaultModel,
+        autoApprove: state.autoApprove,
       }),
     }
   )

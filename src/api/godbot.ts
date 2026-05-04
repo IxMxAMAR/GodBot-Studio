@@ -88,10 +88,16 @@ export class GodbotClient {
     return await r.json();
   }
 
-  async newSession(workspace?: string, autoApprove = true): Promise<string> {
-    const body: Record<string, unknown> = { model: 'auto' };
+  async newSession(
+    workspace?: string,
+    autoApprove = true,
+    opts: { provider?: string; model?: string } = {},
+  ): Promise<string> {
+    const body: Record<string, unknown> = { model: opts.model || 'auto' };
     if (workspace) body.workspace = workspace;
     if (autoApprove) body.auto_approve_in_sandbox = true;
+    if (opts.provider) body.provider = opts.provider;
+    if (opts.model) body.model_name = opts.model;
     const r = await fetch(`${this.baseUrl}/api/sessions/new`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify(body),
