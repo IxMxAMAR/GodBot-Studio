@@ -1,5 +1,5 @@
 import { useStore } from '../state/store';
-import { spawnDaemon } from './WorkspacePicker';
+import { spawnDaemon } from '../api/daemon';
 
 export function StatusBar() {
   const workspace = useStore((s) => s.workspace);

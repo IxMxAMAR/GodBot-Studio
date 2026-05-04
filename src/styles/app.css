@@ -62,10 +62,6 @@
   overflow: hidden;
 }
 
-.main-area[data-show-left="false"] {
-  grid-template-columns: 44px 1fr 320px;
-}
-
 .splitter {
   width: 4px;
   cursor: col-resize;
@@ -73,7 +69,13 @@
   position: relative;
   z-index: 5;
 }
-.splitter:hover { background: var(--accent); opacity: 0.5; }
+.splitter::before {
+  content: '';
+  position: absolute;
+  top: 0; bottom: 0;
+  left: -3px; right: -3px;
+}
+.splitter:hover { background: var(--accent); opacity: 0.4; }
 
 .header-row {
   display: flex;

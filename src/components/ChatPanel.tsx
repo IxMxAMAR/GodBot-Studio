@@ -30,14 +30,14 @@ export function ChatPanel() {
   const [streaming, setStreaming] = useState(false);
   const activeAssistantIdRef = useRef<string | null>(null);
   const tokenBufferRef = useRef<string>('');
+  const abortRef = useRef<AbortController | null>(null);
 
   // Health probe loop.
   useEffect(() => {
     let cancel = false;
     async function probe() {
-      const info = await client.health();
-      if (!cancel) setDaemonHealth(info.ok);
-      if (info.model) useStore.getState().setModel(info.model);
+      const ok = await client.health();
+      if (!cancel) setDaemonHealth(ok);
     }
     const id = setInterval(probe, 5000);
     probe();
@@ -51,7 +51,10 @@ export function ChatPanel() {
     (async () => {
       try {
         const sid = await client.newSession(workspace, true);
-        if (!cancel) setSessionId(sid);
+        if (cancel) return;
+        setSessionId(sid);
+        const info = await client.getSession(sid);
+        if (info?.model && !cancel) useStore.getState().setModel(info.model);
       } catch (e: any) {
         // Surface to chat as an error message; the user has no other recovery path.
         useStore.getState().appendMessage({
@@ -80,16 +83,20 @@ export function ChatPanel() {
     activeAssistantIdRef.current = assistantId;
     tokenBufferRef.current = '';
     setStreaming(true);
+    abortRef.current = new AbortController();
     try {
       await client.send(sessionId, text);
-      for await (const ev of client.stream(sessionId)) {
+      for await (const ev of client.stream(sessionId, abortRef.current.signal)) {
         handleEvent(ev);
       }
     } catch (e: any) {
-      appendMessage({ id: crypto.randomUUID(), role: 'error', text: String(e?.message ?? e) });
+      if (e?.name !== 'AbortError') {
+        appendMessage({ id: crypto.randomUUID(), role: 'error', text: String(e?.message ?? e) });
+      }
     } finally {
       setStreaming(false);
       activeAssistantIdRef.current = null;
+      abortRef.current = null;
     }
   }
 
@@ -160,7 +167,8 @@ export function ChatPanel() {
             return <div key={m.id} className="chat-bubble-user">{m.text}</div>;
           }
           if (m.role === 'assistant') {
-            return <div key={m.id} className="chat-bubble-assistant">{m.text}</div>;
+            if (!m.text && !streaming) return null;
+            return <div key={m.id} className="chat-bubble-assistant">{m.text || '⏳'}</div>;
           }
           if (m.role === 'tool_call') {
             return (
@@ -193,7 +201,14 @@ export function ChatPanel() {
           disabled={disabled}
         />
         <button
-          onClick={() => streaming ? sessionId && client.stop(sessionId).catch(console.error) : send()}
+          onClick={() => {
+            if (streaming) {
+              abortRef.current?.abort();
+              if (sessionId) client.stop(sessionId).catch(console.error);
+            } else {
+              send();
+            }
+          }}
           disabled={!sessionId && !streaming}
           title={streaming ? 'Stop streaming' : 'Send'}
         >

@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { persist } from 'zustand/middleware';
 import type { ChatMessage, FileEntry, OpenFile, ActivityKind } from './types';
 
 interface State {
@@ -44,7 +45,9 @@ interface State {
   setDaemonStatus: (s: State['daemonStatus'], err?: string | null) => void;
 }
 
-export const useStore = create<State>((set, get) => ({
+export const useStore = create<State>()(
+  persist(
+    (set, get) => ({
   workspace: null,
   fileTree: [],
   setWorkspace: (path) => set({ workspace: path }),
@@ -114,4 +117,14 @@ export const useStore = create<State>((set, get) => ({
   setDaemonHealth: (ok) => set({ daemonHealthy: ok }),
   setModel: (name) => set({ modelName: name }),
   setDaemonStatus: (s, err = null) => set({ daemonStatus: s, daemonError: err }),
-}));
+    }),
+    {
+      name: 'godbot-studio-ui',
+      partialize: (state) => ({
+        leftWidth: state.leftWidth,
+        rightWidth: state.rightWidth,
+        activity: state.activity,
+      }),
+    }
+  )
+);
