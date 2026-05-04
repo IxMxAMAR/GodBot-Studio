@@ -16,7 +16,7 @@ const SKIP: &[&str] = &[
 ];
 
 #[tauri::command]
-pub fn list_dir_cmd(path: String) -> Result<Vec<FileEntry>, String> {
+pub fn list_dir(path: String) -> Result<Vec<FileEntry>, String> {
     let p = PathBuf::from(&path);
     let mut out = Vec::new();
     let entries = fs::read_dir(&p).map_err(|e| e.to_string())?;
@@ -43,12 +43,12 @@ pub fn list_dir_cmd(path: String) -> Result<Vec<FileEntry>, String> {
 }
 
 #[tauri::command]
-pub fn read_file_cmd(path: String) -> Result<String, String> {
+pub fn read_file(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn write_file_cmd(path: String, content: String) -> Result<(), String> {
+pub fn write_file(path: String, content: String) -> Result<(), String> {
     if let Some(parent) = PathBuf::from(&path).parent() {
         if !parent.exists() {
             fs::create_dir_all(parent).map_err(|e| e.to_string())?;

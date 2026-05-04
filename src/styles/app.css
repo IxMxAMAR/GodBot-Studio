@@ -31,6 +31,11 @@
   color: var(--text-muted);
   flex: 1;
   font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
 }
 
 .title-bar .window-controls {
@@ -60,6 +65,15 @@
 .main-area[data-show-left="false"] {
   grid-template-columns: 44px 1fr 320px;
 }
+
+.splitter {
+  width: 4px;
+  cursor: col-resize;
+  background: transparent;
+  position: relative;
+  z-index: 5;
+}
+.splitter:hover { background: var(--accent); opacity: 0.5; }
 
 .header-row {
   display: flex;

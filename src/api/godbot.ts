@@ -75,35 +75,40 @@ export class GodbotClient {
     let pending = '';
     let eventName: string | null = null;
     let dataBuf: string[] = [];
-    while (true) {
-      const { value, done } = await reader.read();
-      if (done) break;
-      pending += decoder.decode(value, { stream: true });
-      let nl: number;
-      while ((nl = pending.indexOf('\n')) >= 0) {
-        const line = pending.slice(0, nl).replace(/\r$/, '');
-        pending = pending.slice(nl + 1);
-        if (line === '') {
-          if (eventName && dataBuf.length) {
-            const dataStr = dataBuf.join('\n');
-            try {
-              const payload = JSON.parse(dataStr);
-              if (eventName !== 'ping') {
-                yield payload as GodbotEvent;
-                if ((payload as GodbotEvent).type === 'done') return;
-              }
-            } catch { /* drop */ }
+    try {
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        pending += decoder.decode(value, { stream: true });
+        let nl: number;
+        while ((nl = pending.indexOf('\n')) >= 0) {
+          const line = pending.slice(0, nl).replace(/\r$/, '');
+          pending = pending.slice(nl + 1);
+          if (line === '') {
+            if (eventName && dataBuf.length) {
+              const dataStr = dataBuf.join('\n');
+              try {
+                const payload = JSON.parse(dataStr);
+                if (eventName !== 'ping') {
+                  yield payload as GodbotEvent;
+                  if ((payload as GodbotEvent).type === 'done') return;
+                }
+              } catch { /* drop */ }
+            }
+            eventName = null;
+            dataBuf = [];
+          } else if (line.startsWith(':')) {
+            // SSE comment
+          } else if (line.startsWith('event:')) {
+            eventName = line.slice(6).trim();
+          } else if (line.startsWith('data:')) {
+            dataBuf.push(line.slice(5).replace(/^ /, ''));
           }
-          eventName = null;
-          dataBuf = [];
-        } else if (line.startsWith(':')) {
-          // SSE comment
-        } else if (line.startsWith('event:')) {
-          eventName = line.slice(6).trim();
-        } else if (line.startsWith('data:')) {
-          dataBuf.push(line.slice(5).replace(/^ /, ''));
         }
       }
+    } finally {
+      try { reader.releaseLock(); } catch {}
+      try { await resp.body!.cancel(); } catch {}
     }
   }
 }

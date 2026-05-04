@@ -20,6 +20,10 @@ interface State {
   // UI
   activity: ActivityKind;
   setActivity: (a: ActivityKind) => void;
+  leftWidth: number;
+  rightWidth: number;
+  setLeftWidth: (n: number) => void;
+  setRightWidth: (n: number) => void;
 
   // Chat
   sessionId: string | null;
@@ -77,6 +81,10 @@ export const useStore = create<State>((set) => ({
 
   activity: 'files',
   setActivity: (a) => set({ activity: a }),
+  leftWidth: 240,
+  rightWidth: 320,
+  setLeftWidth: (n) => set({ leftWidth: n }),
+  setRightWidth: (n) => set({ rightWidth: n }),
 
   sessionId: null,
   setSessionId: (sid) => set({ sessionId: sid }),

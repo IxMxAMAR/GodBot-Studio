@@ -11,9 +11,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(DaemonState::new())
         .invoke_handler(tauri::generate_handler![
-            fs::list_dir_cmd,
-            fs::read_file_cmd,
-            fs::write_file_cmd,
+            fs::list_dir,
+            fs::read_file,
+            fs::write_file,
             daemon::spawn_daemon,
             daemon::check_daemon_health,
         ])

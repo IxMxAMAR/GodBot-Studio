@@ -8,13 +8,13 @@ export async function pickWorkspace(): Promise<string | null> {
 }
 
 export async function listDir(path: string): Promise<FileEntry[]> {
-  return await invoke<FileEntry[]>('list_dir_cmd', { path });
+  return await invoke<FileEntry[]>('list_dir', { path });
 }
 
 export async function readFileText(path: string): Promise<string> {
-  return await invoke<string>('read_file_cmd', { path });
+  return await invoke<string>('read_file', { path });
 }
 
 export async function writeFileText(path: string, content: string): Promise<void> {
-  await invoke('write_file_cmd', { path, content });
+  await invoke('write_file', { path, content });
 }

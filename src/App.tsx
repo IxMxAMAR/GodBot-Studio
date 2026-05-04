@@ -5,6 +5,7 @@ import { FileTree } from './components/FileTree';
 import { WorkspacePicker } from './components/WorkspacePicker';
 import { EditorPane } from './components/EditorPane';
 import { ChatPanel } from './components/ChatPanel';
+import { Splitter } from './components/Splitter';
 import { useStore } from './state/store';
 import './styles/globals.css';
 import './styles/app.css';
@@ -13,14 +14,27 @@ export default function App() {
   const workspace = useStore((s) => s.workspace);
   const activity = useStore((s) => s.activity);
   const setActivity = useStore((s) => s.setActivity);
+  const leftWidth = useStore((s) => s.leftWidth);
+  const rightWidth = useStore((s) => s.rightWidth);
+  const setLeftWidth = useStore((s) => s.setLeftWidth);
+  const setRightWidth = useStore((s) => s.setRightWidth);
 
   const showLeft = activity === 'files';
   const showSettings = activity === 'settings';
 
+  // Grid columns: activity-bar | (left-sidebar splitter)? | center | splitter | right-sidebar
+  const gridTemplateColumns = showLeft
+    ? `44px ${leftWidth}px 4px 1fr 4px ${rightWidth}px`
+    : `44px 1fr 4px ${rightWidth}px`;
+
   return (
     <div className="app-root">
       <TitleBar workspace={workspace} />
-      <div className="main-area" data-show-left={showLeft}>
+      <div
+        className="main-area"
+        data-show-left={showLeft}
+        style={{ gridTemplateColumns }}
+      >
         <ActivityBar active={activity} onPick={setActivity} />
         {showLeft && (
           <div className="left-sidebar">
@@ -44,6 +58,7 @@ export default function App() {
             {workspace ? <FileTree /> : <WorkspacePicker />}
           </div>
         )}
+        {showLeft && <Splitter side="left" onResize={setLeftWidth} />}
         <div className="center-area">
           {showSettings ? (
             <div style={{ padding: 32, color: 'var(--text-muted)' }}>
@@ -55,6 +70,7 @@ export default function App() {
             <EditorPane />
           )}
         </div>
+        <Splitter side="right" onResize={setRightWidth} />
         <div className="right-sidebar">
           <div className="header">Chat</div>
           <ChatPanel />
