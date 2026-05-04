@@ -1,51 +1,40 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { useState } from 'react';
+import { TitleBar } from './components/TitleBar';
+import { ActivityBar } from './components/ActivityBar';
+import { StatusBar } from './components/StatusBar';
+import './styles/globals.css';
+import './styles/app.css';
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+type ActivityKind = 'files' | 'chat' | 'settings';
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+export default function App() {
+  const [active, setActive] = useState<ActivityKind>('files');
+  const [workspace] = useState<string | null>(null);
 
   return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
-
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="app-root">
+      <TitleBar workspace={workspace} />
+      <div className="main-area">
+        <ActivityBar active={active} onPick={setActive} />
+        <div className="left-sidebar">
+          <div className="header">Files</div>
+          <div style={{ padding: 12, color: 'var(--text-muted)' }}>
+            (file tree — Task 4)
+          </div>
+        </div>
+        <div className="center-area">
+          <div style={{ padding: 24, color: 'var(--text-muted)' }}>
+            (editor — Task 5)
+          </div>
+        </div>
+        <div className="right-sidebar">
+          <div className="header">Chat</div>
+          <div style={{ padding: 12, color: 'var(--text-muted)' }}>
+            (chat panel — Task 6)
+          </div>
+        </div>
       </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
+      <StatusBar workspace={workspace} model="—" daemonHealthy={false} />
+    </div>
   );
 }
-
-export default App;
