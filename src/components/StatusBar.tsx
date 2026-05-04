@@ -21,6 +21,7 @@ export function StatusBar() {
       <button
         className="item daemon-btn"
         onClick={onRetry}
+        disabled={daemonStatus === 'spawning'}
         title={daemonError ? `Click to retry. Last error: ${daemonError}` : 'Daemon status'}
       >
         <span className={`health-dot ${dotClass}`} />

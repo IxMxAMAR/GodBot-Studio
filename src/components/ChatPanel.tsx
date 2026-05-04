@@ -25,6 +25,7 @@ export function ChatPanel() {
   const setDaemonHealth = useStore((s) => s.setDaemonHealth);
   const workspace = useStore((s) => s.workspace);
   const daemonHealthy = useStore((s) => s.daemonHealthy);
+  const daemonStatus = useStore((s) => s.daemonStatus);
   const conversationRef = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
@@ -73,13 +74,26 @@ export function ChatPanel() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
+  // Ctrl+L global shortcut: focus chat composer.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'l') {
+        e.preventDefault();
+        const ta = document.querySelector('.chat-composer textarea') as HTMLTextAreaElement | null;
+        ta?.focus();
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   async function send() {
     const text = input.trim();
     if (!text || !sessionId || streaming) return;
     setInput('');
     appendMessage({ id: crypto.randomUUID(), role: 'user', text });
     const assistantId = crypto.randomUUID();
-    appendMessage({ id: assistantId, role: 'assistant', text: '⏳ thinking…' });
+    appendMessage({ id: assistantId, role: 'assistant', text: '', pending: true });
     activeAssistantIdRef.current = assistantId;
     tokenBufferRef.current = '';
     setStreaming(true);
@@ -150,13 +164,15 @@ export function ChatPanel() {
 
   const placeholder = !workspace
     ? "Open a folder first."
-    : !daemonHealthy
-      ? "Daemon offline — check the status bar."
-      : !sessionId
-        ? "Starting session…"
-        : streaming
-          ? "Streaming… (use Stop to cancel)"
-          : "type a message...";
+    : daemonStatus === 'spawning'
+      ? "Starting daemon…"
+      : !daemonHealthy
+        ? "Daemon offline — check the status bar."
+        : !sessionId
+          ? "Starting session…"
+          : streaming
+            ? "Streaming… (use Stop to cancel)"
+            : "type a message...";
   const disabled = !sessionId || streaming;
 
   return (

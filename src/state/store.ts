@@ -123,7 +123,6 @@ export const useStore = create<State>()(
       partialize: (state) => ({
         leftWidth: state.leftWidth,
         rightWidth: state.rightWidth,
-        activity: state.activity,
       }),
     }
   )
