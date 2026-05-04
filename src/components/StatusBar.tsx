@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '../state/store';
 import { spawnDaemon } from '../api/daemon';
-import { GodbotClient, type SessionCost, type DaemonStats } from '../api/godbot';
+import {
+  GodbotClient,
+  type SessionCost,
+  type DaemonStats,
+  type AuditEntry,
+} from '../api/godbot';
 import { DAEMON_URL } from '../api/config';
 
 const COST_POLL_MS = 10_000;
@@ -17,6 +22,7 @@ export function StatusBar() {
   const client = useMemo(() => new GodbotClient(DAEMON_URL), []);
   const [cost, setCost] = useState<SessionCost | null>(null);
   const [statsOpen, setStatsOpen] = useState(false);
+  const [auditOpen, setAuditOpen] = useState(false);
 
   const onRetry = () => { if (workspace) void spawnDaemon(workspace); };
 
@@ -90,11 +96,22 @@ export function StatusBar() {
       >
         stats
       </button>
+      <button
+        className="item daemon-btn status-stats-btn"
+        onClick={() => setAuditOpen(true)}
+        disabled={!daemonHealthy}
+        title="Recent dangerous tool calls"
+      >
+        audit
+      </button>
       <span className="item" style={{ marginLeft: 'auto' }}>
         {workspace ?? 'no workspace'}
       </span>
       {statsOpen && (
         <StatsModal client={client} onClose={() => setStatsOpen(false)} />
+      )}
+      {auditOpen && (
+        <AuditModal client={client} onClose={() => setAuditOpen(false)} />
       )}
     </div>
   );
@@ -173,4 +190,102 @@ function StatsModal({ client, onClose }: { client: GodbotClient; onClose: () => 
       </div>
     </div>
   );
+}
+
+/**
+ * Recent dangerous tool calls fetched from /api/audit. Mirrors the
+ * StatsModal styling/keybinding patterns — no new CSS, ESC + backdrop
+ * click both close.
+ */
+function AuditModal({ client, onClose }: { client: GodbotClient; onClose: () => void }) {
+  const [calls, setCalls] = useState<AuditEntry[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancel = false;
+    (async () => {
+      try {
+        const r = await client.getAudit(100);
+        if (!cancel) setCalls(r.calls ?? []);
+      } catch (e: any) {
+        if (!cancel) setError(String(e?.message ?? e));
+      }
+    })();
+    return () => { cancel = true; };
+  }, [client]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="stats-modal-backdrop" onClick={onClose}>
+      <div
+        className="stats-modal"
+        style={{ minWidth: 420, maxWidth: 640 }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="stats-modal-head">
+          <span>Audit log {calls && calls.length > 0 ? `(${calls.length})` : ''}</span>
+          <button onClick={onClose} title="Close (Esc)">×</button>
+        </div>
+        {error && <div className="stats-modal-err">{error}</div>}
+        {!calls && !error && <div className="stats-modal-loading">loading…</div>}
+        {calls && calls.length === 0 && (
+          <div className="stats-modal-loading">No dangerous tool calls recorded.</div>
+        )}
+        {calls && calls.length > 0 && (
+          <div className="stats-modal-body" style={{ maxHeight: 360, overflowY: 'auto' }}>
+            <table>
+              <tbody>
+                {calls.map((c, i) => (
+                  <tr key={c.id ?? `${c.timestamp ?? ''}-${i}`}>
+                    <td style={{ verticalAlign: 'top' }}>
+                      <code>{c.tool ?? '?'}</code>
+                      {c.decision && (
+                        <span style={{ marginLeft: 6, opacity: 0.6 }}>
+                          {String(c.decision)}
+                        </span>
+                      )}
+                      {c.timestamp && (
+                        <div style={{ fontSize: 10, opacity: 0.6 }}>{c.timestamp}</div>
+                      )}
+                    </td>
+                    <td
+                      style={{
+                        textAlign: 'left',
+                        fontFamily: 'var(--font-mono)',
+                        fontSize: 11,
+                        opacity: 0.85,
+                        whiteSpace: 'pre-wrap',
+                        wordBreak: 'break-all',
+                      }}
+                      title={c.session_id ?? ''}
+                    >
+                      {summariseAuditArgs(c.args)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Trim audit args to one line for the table cell. */
+function summariseAuditArgs(args: Record<string, unknown> | undefined): string {
+  if (!args) return '';
+  try {
+    const s = JSON.stringify(args);
+    return s.length > 160 ? s.slice(0, 157) + '…' : s;
+  } catch {
+    return '';
+  }
 }

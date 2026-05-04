@@ -192,6 +192,71 @@ export interface CompletionStreamBody {
   model?: string;
 }
 
+// ---------------------------------------------------------------------
+// Sub-projects 38-69 — workspaces / audit / explain / pin / replay /
+// dry-run / health-details / task-wait / import. The exact daemon
+// payload shapes are not all locked down (audit entries and health
+// diagnostics are extensible), so the response interfaces use indexer
+// signatures where the daemon may add fields over time.
+// ---------------------------------------------------------------------
+
+/** GET /api/workspaces — recent workspaces seen by the daemon. */
+export interface WorkspaceSummary {
+  path: string;
+  sessions: number;
+  last_activity: string | null;
+  [k: string]: unknown;
+}
+export interface WorkspacesResponse {
+  workspaces: WorkspaceSummary[];
+}
+
+/** GET /api/audit — recent dangerous tool-call audit records. */
+export interface AuditEntry {
+  /** Stable record id (sequence or hash) when present. */
+  id?: string;
+  timestamp?: string;
+  session_id?: string;
+  workspace?: string | null;
+  /** Tool name that triggered the audit log entry. */
+  tool?: string;
+  args?: Record<string, unknown>;
+  decision?: 'allow' | 'deny' | 'always' | string;
+  /** Free-form descriptor — daemon may evolve this over time. */
+  [k: string]: unknown;
+}
+export interface AuditResponse {
+  calls: AuditEntry[];
+}
+
+/** GET /api/health/details — enriched diagnostics over /api/health. */
+export interface HealthDetails {
+  ok: boolean;
+  version?: string;
+  uptime_s?: number;
+  providers?: Record<string, unknown>;
+  active_sessions?: number;
+  [k: string]: unknown;
+}
+
+/** GET /api/sessions/{sid}/explain — synthesised summary of a session. */
+export interface SessionExplanation {
+  label: string;
+  tool_calls: number;
+  messages: number;
+  errors: number;
+  tools_used: string[];
+  [k: string]: unknown;
+}
+
+/** POST /api/agent/dry_run — what the agent would send without executing. */
+export interface AgentDryRunResult {
+  system_prompt: string;
+  mode: string;
+  tool_catalog: Array<{ name: string; description?: string; [k: string]: unknown }>;
+  [k: string]: unknown;
+}
+
 export class GodbotClient {
   constructor(public baseUrl = 'http://127.0.0.1:7879') {
     this.baseUrl = baseUrl.replace(/\/$/, '');
@@ -634,6 +699,130 @@ export class GodbotClient {
     force: boolean = false,
   ): Promise<{ summary: string; cached: boolean }> {
     return this.autoSummarize(workspace, force);
+  }
+
+  // ---------------------------------------------------------------------
+  // Sub-projects 38-69 — workspaces / audit / explain / pin / replay /
+  // dry-run / health-details / task-wait / import.
+  // ---------------------------------------------------------------------
+
+  /**
+   * POST /api/sessions/import — load a session previously exported via
+   * `exportSession(sid, 'json')`. The daemon mints a fresh session id
+   * for the imported log so the original sid can keep coexisting.
+   */
+  async importSession(payload: unknown): Promise<{ session_id: string }> {
+    const r = await fetch(`${this.baseUrl}/api/sessions/import`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) throw new Error(`importSession ${r.status}: ${await r.text()}`);
+    return await r.json();
+  }
+
+  /** GET /api/sessions/{sid}/explain — high-level session synopsis. */
+  async explainSession(sid: string): Promise<SessionExplanation> {
+    const r = await fetch(
+      `${this.baseUrl}/api/sessions/${encodeURIComponent(sid)}/explain`,
+    );
+    if (!r.ok) throw new Error(`explainSession ${r.status}: ${await r.text()}`);
+    return await r.json();
+  }
+
+  /** POST /api/sessions/{sid}/pin — mark a session as pinned/unpinned. */
+  async pinSession(sid: string, pinned: boolean): Promise<void> {
+    const r = await fetch(
+      `${this.baseUrl}/api/sessions/${encodeURIComponent(sid)}/pin`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ pinned }),
+      },
+    );
+    if (!r.ok) throw new Error(`pinSession ${r.status}: ${await r.text()}`);
+  }
+
+  /** GET /api/workspaces — recent workspaces with session counts. */
+  async listWorkspaces(): Promise<WorkspacesResponse> {
+    const r = await fetch(`${this.baseUrl}/api/workspaces`);
+    if (!r.ok) throw new Error(`listWorkspaces ${r.status}: ${await r.text()}`);
+    return await r.json();
+  }
+
+  /** GET /api/audit — recent dangerous tool-call records. */
+  async getAudit(limit: number = 100): Promise<AuditResponse> {
+    const params = new URLSearchParams();
+    if (limit) params.set('limit', String(limit));
+    const qs = params.toString();
+    const r = await fetch(`${this.baseUrl}/api/audit${qs ? `?${qs}` : ''}`);
+    if (!r.ok) throw new Error(`getAudit ${r.status}: ${await r.text()}`);
+    return await r.json();
+  }
+
+  /** GET /api/health/details — enriched diagnostics over /api/health. */
+  async healthDetails(): Promise<HealthDetails> {
+    const r = await fetch(`${this.baseUrl}/api/health/details`);
+    if (!r.ok) throw new Error(`healthDetails ${r.status}: ${await r.text()}`);
+    return await r.json();
+  }
+
+  /**
+   * GET /api/tasks/{tid}/wait — block until the task reaches a terminal
+   * state or the daemon-side timeout elapses. The default `timeout` of
+   * 60s matches the daemon's documented default.
+   */
+  async waitTask(tid: string, timeout: number = 60): Promise<TaskRecord> {
+    const params = new URLSearchParams();
+    if (timeout) params.set('timeout', String(timeout));
+    const qs = params.toString();
+    const r = await fetch(
+      `${this.baseUrl}/api/tasks/${encodeURIComponent(tid)}/wait${qs ? `?${qs}` : ''}`,
+    );
+    if (!r.ok) throw new Error(`waitTask ${r.status}: ${await r.text()}`);
+    return await r.json();
+  }
+
+  /**
+   * POST /api/agent/dry_run — preview the system prompt, mode and tool
+   * catalog the agent would use for this session/message without
+   * actually invoking the model.
+   */
+  async agentDryRun(
+    sessionId: string,
+    message?: string,
+  ): Promise<AgentDryRunResult> {
+    const body: Record<string, unknown> = { session_id: sessionId };
+    if (message !== undefined) body.message = message;
+    const r = await fetch(`${this.baseUrl}/api/agent/dry_run`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error(`agentDryRun ${r.status}: ${await r.text()}`);
+    return await r.json();
+  }
+
+  /**
+   * SSE consumer for GET /api/sessions/{sid}/replay. Replays a past
+   * session's events at the requested cadence (`delay_ms` between
+   * frames; 0 = as-fast-as-possible). Mirrors the live `stream()`
+   * parser and yields the same `GodbotEvent` shapes.
+   */
+  async *streamReplay(
+    sid: string,
+    delayMs: number = 0,
+    signal?: AbortSignal,
+  ): AsyncGenerator<GodbotEvent> {
+    const params = new URLSearchParams();
+    if (delayMs) params.set('delay_ms', String(delayMs));
+    const qs = params.toString();
+    const url =
+      `${this.baseUrl}/api/sessions/${encodeURIComponent(sid)}/replay` +
+      (qs ? `?${qs}` : '');
+    const resp = await fetch(url, { signal });
+    if (!resp.ok || !resp.body) throw new Error(`streamReplay ${resp.status}`);
+    yield* parseSseStream<GodbotEvent>(resp);
   }
 
   async *stream(sid: string, signal?: AbortSignal): AsyncGenerator<GodbotEvent> {
