@@ -9,6 +9,7 @@ export function ActivityBar({
         className={active === 'files' ? 'active' : ''}
         onClick={() => onPick('files')}
         title="Files"
+        aria-label="Files"
       >
         ☰
       </button>
@@ -16,6 +17,7 @@ export function ActivityBar({
         className={active === 'chat' ? 'active' : ''}
         onClick={() => onPick('chat')}
         title="Chat"
+        aria-label="Chat"
       >
         ◇
       </button>
@@ -23,6 +25,7 @@ export function ActivityBar({
         className={active === 'settings' ? 'active' : ''}
         onClick={() => onPick('settings')}
         title="Settings"
+        aria-label="Settings"
       >
         ⚙
       </button>

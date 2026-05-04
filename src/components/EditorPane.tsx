@@ -49,7 +49,7 @@ export function EditorPane() {
     monaco.editor.setTheme(MONACO_THEME);
   }, [monaco]);
 
-  // Ctrl+S handler
+  // Ctrl+S save, Ctrl+W close, Ctrl+Tab cycle
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
@@ -58,16 +58,39 @@ export function EditorPane() {
         if (active) {
           writeFileText(active.path, active.content)
             .then(() => markClean(active.path))
-            .catch(console.error);
+            .catch((err) => useStore.getState().appendMessage({
+              id: crypto.randomUUID(), role: 'error',
+              text: `Save failed (${active.name}): ${err?.message ?? err}`,
+            }));
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'w') {
+        e.preventDefault();
+        if (activePath) closeFile(activePath);
+      } else if (e.ctrlKey && e.key === 'Tab') {
+        e.preventDefault();
+        if (openFiles.length > 1 && activePath) {
+          const idx = openFiles.findIndex((f) => f.path === activePath);
+          const next = openFiles[(idx + 1) % openFiles.length];
+          useStore.getState().setActivePath(next.path);
         }
       }
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [openFiles, activePath, markClean]);
+  }, [openFiles, activePath, markClean, closeFile]);
 
   if (openFiles.length === 0) {
-    return <div className="editor-empty">Open a file from the sidebar to begin.</div>;
+    return (
+      <div className="editor-empty">
+        <h2>GodBot Studio</h2>
+        <p style={{ color: 'var(--text-muted)' }}>Click a file in the sidebar, or ask the agent to scaffold one.</p>
+        <ul style={{ color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.7, padding: 0, listStyle: 'none' }}>
+          <li><kbd>Ctrl</kbd>+<kbd>S</kbd> save the active file</li>
+          <li><kbd>Ctrl</kbd>+<kbd>W</kbd> close the active tab</li>
+          <li><kbd>Ctrl</kbd>+<kbd>Tab</kbd> cycle tabs</li>
+        </ul>
+      </div>
+    );
   }
 
   const active = openFiles.find((f) => f.path === activePath) ?? openFiles[0];

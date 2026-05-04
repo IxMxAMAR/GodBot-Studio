@@ -274,9 +274,18 @@
 }
 
 .editor-empty {
-  padding: 24px;
-  color: var(--text-muted);
+  padding: 48px;
+  color: var(--text);
   text-align: center;
+}
+.editor-empty h2 { margin-top: 0; color: var(--accent); font-weight: 600; }
+.editor-empty kbd {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  padding: 1px 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
 }
 
 .chat-panel {
@@ -416,4 +425,13 @@
   padding: 0 14px;
   border-radius: 3px;
   font-weight: 600;
+}
+
+.editor-tab,
+.activity-bar button,
+.title-bar .window-controls button,
+.icon-btn,
+.chat-composer button,
+.chat-gate-card button {
+  transition: background 120ms ease, color 120ms ease, opacity 120ms ease;
 }
