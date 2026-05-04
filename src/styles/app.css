@@ -481,3 +481,147 @@
 .settings-panel .hint { color: var(--text-muted); font-size: 11px; margin-top: 6px; }
 .settings-panel .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 4px; vertical-align: middle; }
 .settings-panel .error-cell { color: var(--danger); font-family: var(--font-mono); font-size: 11px; }
+
+/* Thinking pulse — shown while only `thought` is parseable from the stream. */
+.thinking-pulse {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px 12px;
+  margin: 6px 0;
+  background: var(--surface-2);
+  border-radius: 8px;
+}
+.thinking-pulse .dots {
+  display: flex;
+  gap: 4px;
+}
+.thinking-pulse .dots span {
+  width: 6px;
+  height: 6px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  animation: pulse-dot 1.4s ease-in-out infinite;
+}
+.thinking-pulse .dots span:nth-child(2) { animation-delay: 0.2s; }
+.thinking-pulse .dots span:nth-child(3) { animation-delay: 0.4s; }
+.thinking-pulse .thought-preview {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-style: italic;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+@keyframes pulse-dot {
+  0%, 80%, 100% { opacity: 0.3; }
+  40% { opacity: 1; }
+}
+
+/* Thinking block — collapsible chain-of-thought above answer/tool-call. */
+.thinking-block {
+  margin: 4px 0;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.thinking-block .thinking-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: background 120ms ease;
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  width: 100%;
+  text-align: left;
+}
+.thinking-block .thinking-head:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.thinking-block .thinking-label {
+  font-weight: 500;
+}
+.thinking-block .thinking-preview {
+  font-style: italic;
+  margin-left: 6px;
+  opacity: 0.7;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+  min-width: 0;
+}
+.thinking-block .thinking-body {
+  padding: 6px 12px;
+  margin-top: 4px;
+  background: var(--surface-2);
+  border-radius: 4px;
+  border-left: 2px solid var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-style: italic;
+}
+
+/* Inline diff approval card — Monaco DiffEditor + Apply/Edit/Always/Reject. */
+.diff-approval-card {
+  border: 1px solid var(--dangerous-tool, var(--danger));
+  background: var(--surface);
+  margin: 8px 0;
+  border-radius: 6px;
+  font-size: 12px;
+  overflow: hidden;
+}
+.diff-approval-card .head {
+  padding: 8px 12px;
+  font-weight: 600;
+  color: var(--dangerous-tool, var(--danger));
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.diff-approval-card .head code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--surface-2);
+  padding: 1px 6px;
+  border-radius: 3px;
+  color: var(--text);
+  word-break: break-all;
+}
+.diff-approval-card .diff-host {
+  height: 240px;
+  border-bottom: 1px solid var(--border);
+}
+.diff-approval-card .actions {
+  display: flex;
+  gap: 6px;
+  padding: 8px 12px;
+  flex-wrap: wrap;
+}
+.diff-approval-card .actions button {
+  padding: 4px 12px;
+  border-radius: 3px;
+  font-weight: 500;
+  font-size: 11px;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.diff-approval-card .actions button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.diff-approval-card .actions .allow { background: var(--success, #4ade80); color: var(--bg); }
+.diff-approval-card .actions .edit { background: var(--accent); color: var(--bg); }
+.diff-approval-card .actions .always { background: var(--surface-2); color: var(--text); }
+.diff-approval-card .actions .deny { background: var(--danger); color: white; }
+.diff-approval-card .resolved {
+  padding: 8px 12px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.diff-approval-card .resolved strong { color: var(--text); }
