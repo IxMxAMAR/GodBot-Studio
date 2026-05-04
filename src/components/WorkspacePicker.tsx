@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { pickWorkspace, listDir } from '../api/tauri';
 import { useStore } from '../state/store';
+import { DAEMON_PORT, PYTHON_PATH } from '../api/config';
 
 export function WorkspacePicker() {
   const setWorkspace = useStore((s) => s.setWorkspace);
@@ -12,16 +13,7 @@ export function WorkspacePicker() {
     setWorkspace(path);
     const tree = await listDir(path);
     setFileTree(tree);
-    // Spawn the daemon (best-effort; chat panel will probe and recover).
-    try {
-      await invoke('spawn_daemon', {
-        pythonPath: 'C:/GodBot/.venv/Scripts/python.exe',
-        sessionsRoot: `${path}/.godbot-sessions`,
-        port: 7879,
-      });
-    } catch (e) {
-      console.error('daemon spawn failed:', e);
-    }
+    await spawnDaemon(path);
   }
 
   return (
@@ -42,4 +34,23 @@ export function WorkspacePicker() {
       </button>
     </div>
   );
+}
+
+export async function spawnDaemon(path: string) {
+  useStore.getState().setDaemonStatus('spawning');
+  try {
+    await invoke('spawn_daemon', {
+      pythonPath: PYTHON_PATH,
+      sessionsRoot: `${path}/.godbot-sessions`,
+      port: DAEMON_PORT,
+    });
+    useStore.getState().setDaemonStatus('ready');
+  } catch (e: any) {
+    useStore.getState().setDaemonStatus('error', String(e?.message ?? e));
+    useStore.getState().appendMessage({
+      id: crypto.randomUUID(),
+      role: 'error',
+      text: `Daemon spawn failed: ${e?.message ?? e}`,
+    });
+  }
 }

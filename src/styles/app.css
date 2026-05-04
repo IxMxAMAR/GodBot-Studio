@@ -57,6 +57,31 @@
   overflow: hidden;
 }
 
+.main-area[data-show-left="false"] {
+  grid-template-columns: 44px 1fr 320px;
+}
+
+.header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.icon-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+.icon-btn:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
 .activity-bar {
   background: var(--surface);
   border-right: 1px solid var(--border);
@@ -153,6 +178,30 @@
 
 .status-bar .health-dot.ok { background: var(--success); }
 .status-bar .health-dot.bad { background: var(--danger); }
+
+.status-bar .daemon-btn {
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font: inherit;
+  padding: 0;
+}
+
+.status-bar .daemon-btn:hover { opacity: 0.85; }
+
+.status-bar .health-dot.spinning {
+  background: var(--warn);
+  animation: pulse 1.2s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
 
 .editor-tabs {
   display: flex;

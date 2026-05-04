@@ -32,8 +32,11 @@ interface State {
   // Daemon
   daemonHealthy: boolean;
   modelName: string;
+  daemonStatus: 'idle' | 'spawning' | 'ready' | 'error';
+  daemonError: string | null;
   setDaemonHealth: (ok: boolean) => void;
   setModel: (name: string) => void;
+  setDaemonStatus: (s: State['daemonStatus'], err?: string | null) => void;
 }
 
 export const useStore = create<State>((set) => ({
@@ -85,6 +88,9 @@ export const useStore = create<State>((set) => ({
 
   daemonHealthy: false,
   modelName: '',
+  daemonStatus: 'idle',
+  daemonError: null,
   setDaemonHealth: (ok) => set({ daemonHealthy: ok }),
   setModel: (name) => set({ modelName: name }),
+  setDaemonStatus: (s, err = null) => set({ daemonStatus: s, daemonError: err }),
 }));
