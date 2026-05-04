@@ -63,6 +63,16 @@ interface State {
   /** Whether new sessions start with auto_approve_in_sandbox=true. */
   autoApprove: boolean;
   setAutoApprove: (a: boolean) => void;
+  /** Cursor-style ghost-text completions in Monaco. Persisted. */
+  inlineCompletionsEnabled: boolean;
+  setInlineCompletionsEnabled: (b: boolean) => void;
+  /**
+   * Per-session flag: set to true once the daemon answers 501 for a
+   * /api/complete request, so we stop firing further requests until the
+   * user restarts (e.g. switches provider). NOT persisted.
+   */
+  inlineCompletionsUnsupported: boolean;
+  setInlineCompletionsUnsupported: (b: boolean) => void;
 
   // Chat actions exposed from outside the chat panel.
   // Set by ChatPanel on mount; called by EditorPane's context-menu actions.
@@ -166,6 +176,10 @@ export const useStore = create<State>()(
   setDefaultModel: (m) => set({ defaultModel: m }),
   autoApprove: true,
   setAutoApprove: (a) => set({ autoApprove: a }),
+  inlineCompletionsEnabled: true,
+  setInlineCompletionsEnabled: (b) => set({ inlineCompletionsEnabled: b }),
+  inlineCompletionsUnsupported: false,
+  setInlineCompletionsUnsupported: (b) => set({ inlineCompletionsUnsupported: b }),
 
   sendChatMessage: null,
   setSendChatMessage: (fn) => set({ sendChatMessage: fn }),
@@ -189,6 +203,7 @@ export const useStore = create<State>()(
         defaultProvider: state.defaultProvider,
         defaultModel: state.defaultModel,
         autoApprove: state.autoApprove,
+        inlineCompletionsEnabled: state.inlineCompletionsEnabled,
         projectSummary: state.projectSummary,
       }),
     }

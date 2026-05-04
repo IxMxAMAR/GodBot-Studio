@@ -1145,3 +1145,13 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
+
+/* Sub-project 12: ghost-text inline completions — auto-dismissed once-per-session
+   banner shown above the editor tabs when the daemon answers HTTP 501. */
+.inline-complete-banner {
+  background: var(--surface-2);
+  border-left: 3px solid var(--warn);
+  color: var(--text-muted);
+  padding: 6px 12px;
+  font-size: 12px;
+}

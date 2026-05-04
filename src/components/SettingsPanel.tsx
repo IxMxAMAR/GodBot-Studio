@@ -38,6 +38,8 @@ export function SettingsPanel() {
   const setDefaultModel = useStore((s) => s.setDefaultModel);
   const autoApprove = useStore((s) => s.autoApprove);
   const setAutoApprove = useStore((s) => s.setAutoApprove);
+  const inlineCompletionsEnabled = useStore((s) => s.inlineCompletionsEnabled);
+  const setInlineCompletionsEnabled = useStore((s) => s.setInlineCompletionsEnabled);
 
   const client = useRef(new GodbotClient(DAEMON_URL)).current;
 
@@ -256,6 +258,26 @@ export function SettingsPanel() {
               <span>Auto-approve write_file/edit_file when the target is inside the workspace.</span>
             </label>
             <div className="settings-hint">Applies to newly-created sessions.</div>
+          </div>
+        </div>
+      </section>
+
+      <section>
+        <h3>Editor</h3>
+        <div className="settings-grid">
+          <label>Inline completions</label>
+          <div>
+            <label className="settings-check">
+              <input
+                type="checkbox"
+                checked={inlineCompletionsEnabled}
+                onChange={(e) => setInlineCompletionsEnabled(e.target.checked)}
+              />
+              <span>Cursor-style ghost-text suggestions while you type.</span>
+            </label>
+            <div className="settings-hint">
+              Requires a provider that supports <code>/api/complete</code> (OpenAI today; Anthropic/Gemini not yet).
+            </div>
           </div>
         </div>
       </section>

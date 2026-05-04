@@ -177,6 +177,46 @@ export class GodbotClient {
     if (!r.ok) throw new Error(`deleteNote ${r.status}: ${await r.text()}`);
   }
 
+  /**
+   * Cursor-style inline completion. Returns `supported: false` when the daemon
+   * answers HTTP 501 (provider doesn't implement /api/complete — Anthropic
+   * and Gemini at the moment) so callers can stop firing requests for the
+   * rest of the session. HTTP 502 (transient upstream error) returns
+   * `supported: true` with an empty completion so callers can back off
+   * without disabling the feature outright.
+   */
+  async inlineComplete(opts: {
+    prefix: string;
+    suffix?: string;
+    language?: string;
+    signal?: AbortSignal;
+  }): Promise<{ completion: string; model: string; elapsedMs: number; supported: boolean }> {
+    const body: Record<string, unknown> = { prefix: opts.prefix };
+    if (opts.suffix !== undefined) body.suffix = opts.suffix;
+    if (opts.language) body.language = opts.language;
+    const r = await fetch(`${this.baseUrl}/api/complete`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: opts.signal,
+    });
+    if (r.status === 501) {
+      return { completion: '', model: '', elapsedMs: 0, supported: false };
+    }
+    if (r.status === 502) {
+      // Transient upstream failure — keep the feature on but skip this turn.
+      return { completion: '', model: '', elapsedMs: 0, supported: true };
+    }
+    if (!r.ok) throw new Error(`inlineComplete ${r.status}: ${await r.text()}`);
+    const j = await r.json();
+    return {
+      completion: String(j.completion ?? ''),
+      model: String(j.model ?? ''),
+      elapsedMs: Number(j.elapsed_ms ?? 0),
+      supported: true,
+    };
+  }
+
   async autoSummarize(workspace: string, force = false): Promise<{ summary: string; cached: boolean }> {
     const r = await fetch(`${this.baseUrl}/api/memory/auto_summarize`, {
       method: 'POST', headers: { 'content-type': 'application/json' },

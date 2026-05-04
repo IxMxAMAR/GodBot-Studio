@@ -1,11 +1,21 @@
 import Editor from '@monaco-editor/react';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useStore } from '../state/store';
 import { writeFileText } from '../api/tauri';
+import { GodbotClient } from '../api/godbot';
+import { DAEMON_URL } from '../api/config';
 import { CloseIcon } from './Icons';
 
 const MONACO_DARK = 'godbot-dark';
 const MONACO_LIGHT = 'vs';  // Monaco's built-in light theme
+
+// Match the daemon-side caps in /api/complete so we don't waste bytes the
+// server will trim anyway.
+const MAX_PREFIX_CHARS = 4000;
+const MAX_SUFFIX_CHARS = 2000;
+// Debounce the IDE→daemon round-trip; tuned to feel responsive without
+// flooding the provider while the user is mid-keystroke.
+const INLINE_DEBOUNCE_MS = 250;
 
 const DARK_THEME_DEF = {
   base: 'vs-dark' as const,
@@ -45,6 +55,18 @@ export function EditorPane() {
   const updateContent = useStore((s) => s.updateContent);
   const markClean = useStore((s) => s.markClean);
   const theme = useStore((s) => s.theme);
+
+  // Banner shown once per session if the daemon answers 501 (provider
+  // doesn't support inline completions). Auto-dismisses after 4s.
+  const [unsupportedBanner, setUnsupportedBanner] = useState<string | null>(null);
+  // Banner-already-shown flag prevents re-popping for every subsequent
+  // unsupported response in the same session.
+  const bannerShownRef = useRef(false);
+  useEffect(() => {
+    if (!unsupportedBanner) return;
+    const t = window.setTimeout(() => setUnsupportedBanner(null), 4000);
+    return () => window.clearTimeout(t);
+  }, [unsupportedBanner]);
   // The active file path captured via ref so the onMount closure (which only
   // runs once) still reads fresh values when the user invokes a context-menu
   // action after switching tabs.
@@ -118,6 +140,9 @@ export function EditorPane() {
 
   return (
     <>
+      {unsupportedBanner && (
+        <div className="inline-complete-banner" role="status">{unsupportedBanner}</div>
+      )}
       <div className="editor-tabs">
         {openFiles.map((f) => (
           <div
@@ -157,6 +182,13 @@ export function EditorPane() {
             monacoRef.current = monacoApi;
             monacoApi.editor.setTheme(monacoTheme);
             registerContextMenuActions(editor, monacoApi, activeRef);
+            registerInlineCompletions(monacoApi, () => {
+              if (bannerShownRef.current) return;
+              bannerShownRef.current = true;
+              setUnsupportedBanner(
+                'Inline completions disabled for this provider (Anthropic/Gemini not yet supported).',
+              );
+            });
           }}
           options={{
             fontSize: 13,
@@ -253,5 +285,121 @@ function registerContextMenuActions(
     contextMenuGroupId: 'godbot',
     contextMenuOrder: 4,
     run: () => dispatch('Write tests for this code from {path} {range}. Save them to an appropriate test file:\n{code}'),
+  });
+}
+
+/**
+ * Register a Monaco InlineCompletionsProvider that asks the GodBot daemon
+ * for ghost-text suggestions. Cancels in-flight requests on each new
+ * keystroke (250ms debounced) so we never display stale completions.
+ *
+ * `onUnsupported` is invoked the first time the daemon answers HTTP 501;
+ * the store flag is also flipped so subsequent requests short-circuit.
+ */
+function registerInlineCompletions(monacoApi: any, onUnsupported: () => void) {
+  // Module-level singletons keyed off the `monacoApi` namespace to survive
+  // editor remounts (Monaco's registerInlineCompletionsProvider is
+  // process-global; double-registering would fire two requests per keystroke).
+  const reg = (monacoApi as any).__godbotInlineRegistered;
+  if (reg) return;
+  (monacoApi as any).__godbotInlineRegistered = true;
+
+  const client = new GodbotClient(DAEMON_URL);
+  let debounceTimer: number | null = null;
+  let inflight: AbortController | null = null;
+
+  monacoApi.languages.registerInlineCompletionsProvider('*', {
+    async provideInlineCompletions(model: any, position: any, _ctx: any, token: any) {
+      const state = useStore.getState();
+      if (!state.inlineCompletionsEnabled) return { items: [] };
+      if (state.inlineCompletionsUnsupported) return { items: [] };
+
+      // Skip empty-line / column-1 starts so we don't ping the daemon
+      // for obviously-unhelpful contexts.
+      const lineContent = model.getLineContent(position.lineNumber);
+      if (position.column === 1 && lineContent.trim() === '') return { items: [] };
+
+      // Build prefix (start → cursor) and suffix (cursor → end) using
+      // Monaco's Range API so we get proper line-ending normalization.
+      const fullRange = model.getFullModelRange();
+      const prefixRange = {
+        startLineNumber: fullRange.startLineNumber,
+        startColumn: fullRange.startColumn,
+        endLineNumber: position.lineNumber,
+        endColumn: position.column,
+      };
+      const suffixRange = {
+        startLineNumber: position.lineNumber,
+        startColumn: position.column,
+        endLineNumber: fullRange.endLineNumber,
+        endColumn: fullRange.endColumn,
+      };
+      let prefix: string = model.getValueInRange(prefixRange);
+      let suffix: string = model.getValueInRange(suffixRange);
+      if (!prefix) return { items: [] };
+      if (prefix.length > MAX_PREFIX_CHARS) prefix = prefix.slice(-MAX_PREFIX_CHARS);
+      if (suffix.length > MAX_SUFFIX_CHARS) suffix = suffix.slice(0, MAX_SUFFIX_CHARS);
+      const language: string = model.getLanguageId();
+
+      // Cancel any prior in-flight request + pending debounce — Monaco
+      // may call us many times per second.
+      if (debounceTimer !== null) {
+        window.clearTimeout(debounceTimer);
+        debounceTimer = null;
+      }
+      if (inflight) {
+        inflight.abort();
+        inflight = null;
+      }
+
+      // Wire Monaco's CancellationToken into the same AbortController so
+      // a tab-switch / esc-press kills the fetch immediately.
+      const ctrl = new AbortController();
+      inflight = ctrl;
+      const tokenSub = token.onCancellationRequested?.(() => ctrl.abort());
+
+      const debounced = new Promise<void>((resolve) => {
+        debounceTimer = window.setTimeout(() => {
+          debounceTimer = null;
+          resolve();
+        }, INLINE_DEBOUNCE_MS);
+      });
+
+      try {
+        await debounced;
+        if (ctrl.signal.aborted) return { items: [] };
+        const r = await client.inlineComplete({ prefix, suffix, language, signal: ctrl.signal });
+        if (!r.supported) {
+          useStore.getState().setInlineCompletionsUnsupported(true);
+          onUnsupported();
+          return { items: [] };
+        }
+        if (!r.completion) return { items: [] };
+        return {
+          items: [{
+            insertText: r.completion,
+            range: {
+              startLineNumber: position.lineNumber,
+              startColumn: position.column,
+              endLineNumber: position.lineNumber,
+              endColumn: position.column,
+            },
+          }],
+        };
+      } catch (e: any) {
+        if (e?.name === 'AbortError') return { items: [] };
+        // Transient — log + skip; the toggle stays on so the next keystroke
+        // can recover.
+        console.warn('inlineComplete failed:', e?.message ?? e);
+        return { items: [] };
+      } finally {
+        if (inflight === ctrl) inflight = null;
+        try { tokenSub?.dispose?.(); } catch { /* ignore */ }
+      }
+    },
+    freeInlineCompletions() {
+      // No per-result resources to release; Monaco invokes this when
+      // dismissing the suggestion overlay.
+    },
   });
 }
