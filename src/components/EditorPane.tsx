@@ -29,6 +29,12 @@ export function EditorPane() {
   const updateContent = useStore((s) => s.updateContent);
   const markClean = useStore((s) => s.markClean);
 
+  function closeFileWithConfirm(path: string) {
+    const file = openFiles.find((f) => f.path === path);
+    if (file?.dirty && !window.confirm(`Discard unsaved changes in ${file.name}?`)) return;
+    closeFile(path);
+  }
+
   // Define our custom theme on Monaco load
   useEffect(() => {
     if (!monaco) return;
@@ -68,7 +74,7 @@ export function EditorPane() {
         }
       } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'w') {
         e.preventDefault();
-        if (activePath) closeFile(activePath);
+        if (activePath) closeFileWithConfirm(activePath);
       } else if (e.ctrlKey && e.key === 'Tab') {
         e.preventDefault();
         if (openFiles.length > 1 && activePath) {
@@ -113,7 +119,7 @@ export function EditorPane() {
               className="close"
               onClick={(e) => {
                 e.stopPropagation();
-                closeFile(f.path);
+                closeFileWithConfirm(f.path);
               }}
             >
               ×
