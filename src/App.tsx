@@ -41,18 +41,29 @@ export default function App() {
             <div className="header header-row">
               <span>Files</span>
               {workspace && (
-                <button
-                  aria-label="Close folder"
-                  title="Close folder"
-                  className="icon-btn"
-                  onClick={() => {
-                    useStore.getState().setWorkspace(null);
-                    useStore.getState().setFileTree([]);
-                    useStore.getState().setSessionId(null);
-                    useStore.getState().clearChat();
-                    useStore.getState().setDaemonStatus('idle');
-                  }}
-                >×</button>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button
+                    aria-label="Refresh"
+                    title="Refresh"
+                    className="icon-btn"
+                    onClick={() => useStore.getState().refreshTree()}
+                  >↻</button>
+                  <button
+                    aria-label="Close folder"
+                    title="Close folder"
+                    className="icon-btn"
+                    onClick={() => {
+                      const dirtyCount = useStore.getState().openFiles.filter((f) => f.dirty).length;
+                      if (dirtyCount && !window.confirm(`Discard ${dirtyCount} unsaved file(s)?`)) return;
+                      useStore.getState().setWorkspace(null);
+                      useStore.getState().setFileTree([]);
+                      useStore.getState().setSessionId(null);
+                      useStore.getState().clearChat();
+                      useStore.getState().setDaemonStatus('idle');
+                      useStore.setState({ openFiles: [], activePath: null });
+                    }}
+                  >×</button>
+                </div>
               )}
             </div>
             {workspace ? <FileTree /> : <WorkspacePicker />}

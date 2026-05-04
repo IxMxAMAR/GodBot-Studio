@@ -57,7 +57,10 @@ export function EditorPane() {
         const active = openFiles.find((f) => f.path === activePath);
         if (active) {
           writeFileText(active.path, active.content)
-            .then(() => markClean(active.path))
+            .then(() => {
+              markClean(active.path);
+              void useStore.getState().refreshTree();
+            })
             .catch((err) => useStore.getState().appendMessage({
               id: crypto.randomUUID(), role: 'error',
               text: `Save failed (${active.name}): ${err?.message ?? err}`,

@@ -27,9 +27,13 @@ function TreeNode({ entry, depth }: NodeProps) {
 
   async function onClick() {
     if (entry.isDir) {
-      if (!children && !expanded) {
-        const c = await listDir(entry.path);
-        setChildren(c);
+      if (!expanded) {
+        try {
+          const c = await listDir(entry.path);
+          setChildren(c);
+        } catch (e) {
+          console.error('listDir failed', e);
+        }
       }
       setExpanded(!expanded);
     } else {

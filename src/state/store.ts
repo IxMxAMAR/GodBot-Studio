@@ -7,6 +7,7 @@ interface State {
   fileTree: FileEntry[];
   setWorkspace: (path: string | null) => void;
   setFileTree: (tree: FileEntry[]) => void;
+  refreshTree: () => Promise<void>;
 
   // Editor
   openFiles: OpenFile[];
@@ -43,11 +44,22 @@ interface State {
   setDaemonStatus: (s: State['daemonStatus'], err?: string | null) => void;
 }
 
-export const useStore = create<State>((set) => ({
+export const useStore = create<State>((set, get) => ({
   workspace: null,
   fileTree: [],
   setWorkspace: (path) => set({ workspace: path }),
   setFileTree: (tree) => set({ fileTree: tree }),
+  refreshTree: async () => {
+    const { workspace } = get();
+    if (!workspace) return;
+    const { listDir } = await import('../api/tauri');
+    try {
+      const tree = await listDir(workspace);
+      set({ fileTree: tree });
+    } catch (e) {
+      console.error('refreshTree failed', e);
+    }
+  },
 
   openFiles: [],
   activePath: null,
