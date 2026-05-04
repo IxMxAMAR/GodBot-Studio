@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { TitleBar } from './components/TitleBar';
 import { ActivityBar } from './components/ActivityBar';
 import { StatusBar } from './components/StatusBar';
@@ -22,6 +23,14 @@ export default function App() {
   const setLeftWidth = useStore((s) => s.setLeftWidth);
   const setRightWidth = useStore((s) => s.setRightWidth);
   const showChat = useStore((s) => s.showChat);
+  const theme = useStore((s) => s.theme);
+
+  // Mirror the theme onto <html data-theme=…> so globals.css can swap
+  // CSS variable values without re-renders. Driven by the persisted
+  // store value; first paint reads from localStorage (Zustand persist).
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme);
+  }, [theme]);
 
   const showLeft = activity === 'files';
   const showSettings = activity === 'settings';

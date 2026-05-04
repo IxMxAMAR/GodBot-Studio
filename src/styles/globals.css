@@ -18,6 +18,34 @@
   color-scheme: dark;
 }
 
+/* Light theme — applied via data-theme="light" on <html> by App.tsx.
+ * Uses the palette from sub-project 9 spec; Monaco's `vs` theme is
+ * activated alongside (see EditorPane). */
+html[data-theme="light"] {
+  --bg: #fdfcfa;
+  --surface: #f4f1eb;
+  --surface-2: #ebe6dc;
+  --border: #d4cdbf;
+  --text: #1a1a1a;
+  --text-muted: #6b6b6b;
+  --accent: #0066cc;
+  --accent-hover: #0052a3;
+  --success: #2d7a2d;
+  --warn: #b8860b;
+  --danger: #c92a2a;
+  --dangerous-tool: #d97706;
+
+  color-scheme: light;
+}
+
+/* Status-bar text colour goes inverted relative to the bg; force a
+ * legible foreground on light. */
+html[data-theme="light"] .status-bar { color: white; }
+html[data-theme="light"] .status-bar .health-dot.ok { background: #d6ffd9; }
+html[data-theme="light"] .chat-bubble-user { color: white; }
+html[data-theme="light"] .chat-composer button { color: white; }
+html[data-theme="light"] .chat-error { background: var(--danger); }
+
 * {
   box-sizing: border-box;
 }

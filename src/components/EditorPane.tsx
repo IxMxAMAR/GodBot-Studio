@@ -4,9 +4,10 @@ import { useStore } from '../state/store';
 import { writeFileText } from '../api/tauri';
 import { CloseIcon } from './Icons';
 
-const MONACO_THEME = 'godbot-dark';
+const MONACO_DARK = 'godbot-dark';
+const MONACO_LIGHT = 'vs';  // Monaco's built-in light theme
 
-const THEME_DEF = {
+const DARK_THEME_DEF = {
   base: 'vs-dark' as const,
   inherit: true,
   rules: [],
@@ -43,10 +44,20 @@ export function EditorPane() {
   const closeFile = useStore((s) => s.closeFile);
   const updateContent = useStore((s) => s.updateContent);
   const markClean = useStore((s) => s.markClean);
+  const theme = useStore((s) => s.theme);
   // The active file path captured via ref so the onMount closure (which only
   // runs once) still reads fresh values when the user invokes a context-menu
   // action after switching tabs.
   const activeRef = useRef<{ path: string; name: string } | null>(null);
+  // Track Monaco so we can flip its theme when the app theme changes
+  // without remounting the editor (which would lose undo history).
+  const monacoRef = useRef<any>(null);
+  const monacoTheme = theme === 'light' ? MONACO_LIGHT : MONACO_DARK;
+
+  // Apply Monaco theme on every theme change (idempotent).
+  useEffect(() => {
+    monacoRef.current?.editor.setTheme(monacoTheme);
+  }, [monacoTheme]);
 
   function closeFileWithConfirm(path: string) {
     const file = openFiles.find((f) => f.path === path);
@@ -133,15 +144,18 @@ export function EditorPane() {
           path={active.path}
           defaultLanguage={languageFor(active.name)}
           value={active.content}
-          theme={MONACO_THEME}
+          theme={monacoTheme}
           onChange={(v) => updateContent(active.path, v ?? '')}
           beforeMount={(monacoApi) => {
-            // Define our theme BEFORE the editor mounts so the first paint
-            // already uses it (avoids the visible vs-dark flash).
-            monacoApi.editor.defineTheme(MONACO_THEME, THEME_DEF);
+            // Define our dark theme BEFORE the editor mounts so the first
+            // paint already uses it (avoids the visible vs-dark flash).
+            // The light path uses Monaco's built-in `vs` theme — no
+            // definition needed.
+            monacoApi.editor.defineTheme(MONACO_DARK, DARK_THEME_DEF);
           }}
           onMount={(editor, monacoApi) => {
-            monacoApi.editor.setTheme(MONACO_THEME);
+            monacoRef.current = monacoApi;
+            monacoApi.editor.setTheme(monacoTheme);
             registerContextMenuActions(editor, monacoApi, activeRef);
           }}
           options={{
