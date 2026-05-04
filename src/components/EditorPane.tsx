@@ -1,10 +1,25 @@
-import Editor, { useMonaco } from '@monaco-editor/react';
-import { useEffect } from 'react';
+import Editor from '@monaco-editor/react';
+import { useEffect, useRef } from 'react';
 import { useStore } from '../state/store';
 import { writeFileText } from '../api/tauri';
 import { CloseIcon } from './Icons';
 
 const MONACO_THEME = 'godbot-dark';
+
+const THEME_DEF = {
+  base: 'vs-dark' as const,
+  inherit: true,
+  rules: [],
+  colors: {
+    'editor.background': '#0d1117',
+    'editor.foreground': '#c9d1d9',
+    'editorLineNumber.foreground': '#484f58',
+    'editorLineNumber.activeForeground': '#8b949e',
+    'editorCursor.foreground': '#79c0ff',
+    'editor.selectionBackground': '#264f78',
+    'editor.lineHighlightBackground': '#161b22',
+  },
+};
 
 function languageFor(name: string): string {
   const ext = name.split('.').pop()?.toLowerCase();
@@ -22,39 +37,22 @@ function languageFor(name: string): string {
 }
 
 export function EditorPane() {
-  const monaco = useMonaco();
   const openFiles = useStore((s) => s.openFiles);
   const activePath = useStore((s) => s.activePath);
   const setActivePath = useStore((s) => s.setActivePath);
   const closeFile = useStore((s) => s.closeFile);
   const updateContent = useStore((s) => s.updateContent);
   const markClean = useStore((s) => s.markClean);
+  // The active file path captured via ref so the onMount closure (which only
+  // runs once) still reads fresh values when the user invokes a context-menu
+  // action after switching tabs.
+  const activeRef = useRef<{ path: string; name: string } | null>(null);
 
   function closeFileWithConfirm(path: string) {
     const file = openFiles.find((f) => f.path === path);
     if (file?.dirty && !window.confirm(`Discard unsaved changes in ${file.name}?`)) return;
     closeFile(path);
   }
-
-  // Define our custom theme on Monaco load
-  useEffect(() => {
-    if (!monaco) return;
-    monaco.editor.defineTheme(MONACO_THEME, {
-      base: 'vs-dark',
-      inherit: true,
-      rules: [],
-      colors: {
-        'editor.background': '#0d1117',
-        'editor.foreground': '#c9d1d9',
-        'editorLineNumber.foreground': '#484f58',
-        'editorLineNumber.activeForeground': '#8b949e',
-        'editorCursor.foreground': '#79c0ff',
-        'editor.selectionBackground': '#264f78',
-        'editor.lineHighlightBackground': '#161b22',
-      },
-    });
-    monaco.editor.setTheme(MONACO_THEME);
-  }, [monaco]);
 
   // Ctrl+S save, Ctrl+W close, Ctrl+Tab cycle
   useEffect(() => {
@@ -104,6 +102,8 @@ export function EditorPane() {
   }
 
   const active = openFiles.find((f) => f.path === activePath) ?? openFiles[0];
+  // Keep the ref in sync so context-menu actions read the current tab.
+  activeRef.current = { path: active.path, name: active.name };
 
   return (
     <>
@@ -135,6 +135,15 @@ export function EditorPane() {
           value={active.content}
           theme={MONACO_THEME}
           onChange={(v) => updateContent(active.path, v ?? '')}
+          beforeMount={(monacoApi) => {
+            // Define our theme BEFORE the editor mounts so the first paint
+            // already uses it (avoids the visible vs-dark flash).
+            monacoApi.editor.defineTheme(MONACO_THEME, THEME_DEF);
+          }}
+          onMount={(editor, monacoApi) => {
+            monacoApi.editor.setTheme(MONACO_THEME);
+            registerContextMenuActions(editor, monacoApi, activeRef);
+          }}
           options={{
             fontSize: 13,
             fontFamily: 'JetBrains Mono, Cascadia Code, Consolas, monospace',
@@ -148,4 +157,87 @@ export function EditorPane() {
       </div>
     </>
   );
+}
+
+/**
+ * Register four context-menu entries under group "godbot" — one for each
+ * selection-driven action. Templates are injected into the chat composer
+ * (Ask) or sent immediately (Refactor / Document / Tests) via the
+ * `sendChatMessage` callback ChatPanel registered in the store.
+ *
+ * Bonus keybinding: Ctrl+Alt+G triggers Ask About Selection.
+ */
+function registerContextMenuActions(
+  editor: any,
+  monacoApi: any,
+  activeRef: React.MutableRefObject<{ path: string; name: string } | null>,
+) {
+  function getSelectionContext(): { selection: string; relPath: string; range: string } | null {
+    const sel = editor.getSelection();
+    const model = editor.getModel();
+    if (!sel || !model) return null;
+    const text = model.getValueInRange(sel);
+    if (!text.trim()) return null;
+    const workspace = useStore.getState().workspace ?? '';
+    const fullPath = activeRef.current?.path ?? '';
+    let relPath = fullPath;
+    if (workspace && fullPath.startsWith(workspace)) {
+      relPath = fullPath.slice(workspace.length).replace(/^[\\/]/, '');
+    }
+    const range = sel.startLineNumber === sel.endLineNumber
+      ? `L${sel.startLineNumber}`
+      : `L${sel.startLineNumber}-L${sel.endLineNumber}`;
+    return { selection: text, relPath, range };
+  }
+
+  function dispatch(template: string) {
+    const ctx = getSelectionContext();
+    if (!ctx) return;
+    const fenced = '```\n' + ctx.selection + '\n```';
+    const message = template
+      .replace('{path}', ctx.relPath || '(unsaved)')
+      .replace('{range}', ctx.range)
+      .replace('{code}', fenced);
+    const sender = useStore.getState().sendChatMessage;
+    if (sender) sender(message);
+  }
+
+  editor.addAction({
+    id: 'godbot.askAboutSelection',
+    label: 'GodBot: Ask about this',
+    contextMenuGroupId: 'godbot',
+    contextMenuOrder: 1,
+    keybindings: [monacoApi.KeyMod.CtrlCmd | monacoApi.KeyMod.Alt | monacoApi.KeyCode.KeyG],
+    run: () => {
+      const ctx = getSelectionContext();
+      if (!ctx) return;
+      const message = `In ${ctx.relPath || '(unsaved)'} ${ctx.range}\n\`\`\`\n${ctx.selection}\n\`\`\`\n\nQuestion: `;
+      const sender = useStore.getState().sendChatMessage;
+      if (sender) sender(message);
+    },
+  });
+
+  editor.addAction({
+    id: 'godbot.refactorSelection',
+    label: 'GodBot: Refactor this',
+    contextMenuGroupId: 'godbot',
+    contextMenuOrder: 2,
+    run: () => dispatch('Refactor this code from {path} {range} to be cleaner. Keep behaviour identical:\n{code}'),
+  });
+
+  editor.addAction({
+    id: 'godbot.documentSelection',
+    label: 'GodBot: Document this',
+    contextMenuGroupId: 'godbot',
+    contextMenuOrder: 3,
+    run: () => dispatch('Add a doc comment to this code from {path} {range} in the appropriate style for the language:\n{code}'),
+  });
+
+  editor.addAction({
+    id: 'godbot.testsForSelection',
+    label: 'GodBot: Tests for this',
+    contextMenuGroupId: 'godbot',
+    contextMenuOrder: 4,
+    run: () => dispatch('Write tests for this code from {path} {range}. Save them to an appropriate test file:\n{code}'),
+  });
 }

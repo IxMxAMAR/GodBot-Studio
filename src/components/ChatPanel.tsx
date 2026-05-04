@@ -82,10 +82,8 @@ export function ChatPanel() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  async function send() {
-    const text = input.trim();
-    if (!text || !sessionId || streaming) return;
-    setInput('');
+  async function sendText(text: string) {
+    if (!text.trim() || !sessionId || streaming) return;
     appendMessage({ id: crypto.randomUUID(), role: 'user', text });
     const assistantId = crypto.randomUUID();
     appendMessage({ id: assistantId, role: 'assistant', text: '', pending: true });
@@ -108,6 +106,45 @@ export function ChatPanel() {
       abortRef.current = null;
     }
   }
+
+  async function send() {
+    const text = input.trim();
+    if (!text) return;
+    setInput('');
+    await sendText(text);
+  }
+
+  // Register a `sendChatMessage` callback in the store so the editor's
+  // context-menu actions can route messages into chat. The callback either
+  // sends immediately (templates that don't need user input — Refactor,
+  // Document, Tests) or pre-fills the composer (Ask About — needs the user
+  // to add their question).
+  // We use a ref to capture the latest sessionId/streaming via closure of sendText.
+  const sendTextRef = useRef(sendText);
+  sendTextRef.current = sendText;
+  useEffect(() => {
+    const setFn = useStore.getState().setSendChatMessage;
+    setFn((text: string) => {
+      // If text ends with "Question: " (Ask About), pre-fill composer + focus.
+      // Otherwise send immediately.
+      if (/Question:\s*$/.test(text)) {
+        setInput((prev) => (prev ? prev + '\n\n' + text : text));
+        setTimeout(() => {
+          const ta = document.querySelector('.chat-composer textarea') as HTMLTextAreaElement | null;
+          ta?.focus();
+          // Move caret to the end so the user types after "Question: ".
+          if (ta) {
+            ta.setSelectionRange(ta.value.length, ta.value.length);
+          }
+        }, 0);
+      } else {
+        void sendTextRef.current(text);
+      }
+    });
+    return () => {
+      useStore.getState().setSendChatMessage(null);
+    };
+  }, []);
 
   function handleEvent(ev: GodbotEvent) {
     if (ev.type === 'token') {

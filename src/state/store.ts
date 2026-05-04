@@ -45,6 +45,11 @@ interface State {
   setDaemonHealth: (ok: boolean) => void;
   setModel: (name: string) => void;
   setDaemonStatus: (s: State['daemonStatus'], err?: string | null) => void;
+
+  // Chat actions exposed from outside the chat panel.
+  // Set by ChatPanel on mount; called by EditorPane's context-menu actions.
+  sendChatMessage: ((text: string) => void) | null;
+  setSendChatMessage: (fn: ((text: string) => void) | null) => void;
 }
 
 export const useStore = create<State>()(
@@ -121,6 +126,9 @@ export const useStore = create<State>()(
   setDaemonHealth: (ok) => set({ daemonHealthy: ok }),
   setModel: (name) => set({ modelName: name }),
   setDaemonStatus: (s, err = null) => set({ daemonStatus: s, daemonError: err }),
+
+  sendChatMessage: null,
+  setSendChatMessage: (fn) => set({ sendChatMessage: fn }),
     }),
     {
       name: 'godbot-studio-ui',
