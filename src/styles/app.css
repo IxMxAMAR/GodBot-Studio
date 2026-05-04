@@ -20,6 +20,13 @@
   margin-right: 8px;
 }
 
+.title-bar .brand-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 6px;
+  -webkit-app-region: drag;
+}
+
 .title-bar .workspace-label {
   color: var(--text-muted);
   flex: 1;

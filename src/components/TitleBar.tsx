@@ -1,18 +1,19 @@
-import { Window } from '@tauri-apps/api/window';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 
-const win = Window.getCurrent();
+const win = getCurrentWindow();
 
 export function TitleBar({ workspace }: { workspace: string | null }) {
   return (
-    <div className="title-bar">
-      <span className="brand">GodBot</span>
-      <span className="workspace-label">
+    <div className="title-bar" data-tauri-drag-region>
+      <img src="/icon.png" alt="" className="brand-icon" data-tauri-drag-region />
+      <span className="brand" data-tauri-drag-region>GodBot</span>
+      <span className="workspace-label" data-tauri-drag-region>
         {workspace ? `· ${workspace}` : '· no workspace'}
       </span>
       <div className="window-controls">
-        <button onClick={() => win.minimize()}>—</button>
-        <button onClick={async () => (await win.isMaximized()) ? win.unmaximize() : win.maximize()}>□</button>
-        <button className="close" onClick={() => win.close()}>×</button>
+        <button aria-label="Minimize" onClick={() => win.minimize().catch(console.error)}>—</button>
+        <button aria-label="Maximize" onClick={() => win.toggleMaximize().catch(console.error)}>□</button>
+        <button aria-label="Close" className="close" onClick={() => win.close().catch(console.error)}>×</button>
       </div>
     </div>
   );
