@@ -4,12 +4,14 @@ import { spawnDaemon } from '../api/daemon';
 import {
   GodbotClient,
   type SessionCost,
+  type ContextUsage,
   type DaemonStats,
   type AuditEntry,
 } from '../api/godbot';
 import { DAEMON_URL } from '../api/config';
 
 const COST_POLL_MS = 10_000;
+const CONTEXT_POLL_MS = 8_000;
 
 export function StatusBar() {
   const workspace = useStore((s) => s.workspace);
@@ -21,6 +23,7 @@ export function StatusBar() {
 
   const client = useMemo(() => new GodbotClient(DAEMON_URL), []);
   const [cost, setCost] = useState<SessionCost | null>(null);
+  const [ctx, setCtx] = useState<ContextUsage | null>(null);
   const [statsOpen, setStatsOpen] = useState(false);
   const [auditOpen, setAuditOpen] = useState(false);
 
@@ -54,6 +57,36 @@ export function StatusBar() {
     return () => { cancel = true; clearInterval(id); };
   }, [sessionId, daemonHealthy, client]);
 
+  // Poll context-window usage (sub-project 111). Same lifetime rules
+  // as cost — only runs while a session is bound + daemon is healthy.
+  // Drives the green/yellow/red bar in the status bar so the user can
+  // see when they're approaching the ~80% trim threshold.
+  const lastCtxSidRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!sessionId || !daemonHealthy) {
+      setCtx(null);
+      return;
+    }
+    if (lastCtxSidRef.current !== sessionId) {
+      lastCtxSidRef.current = sessionId;
+      setCtx(null);
+    }
+    let cancel = false;
+    async function tick() {
+      if (!sessionId) return;
+      try {
+        const u = await client.getContextUsage(sessionId);
+        if (!cancel) setCtx(u);
+      } catch {
+        // 404 during session creation is expected — keep the last known
+        // value so the bar doesn't flicker.
+      }
+    }
+    void tick();
+    const id = setInterval(tick, CONTEXT_POLL_MS);
+    return () => { cancel = true; clearInterval(id); };
+  }, [sessionId, daemonHealthy, client]);
+
   let label = 'daemon';
   let dotClass = 'bad';
   if (daemonStatus === 'spawning') { label = 'spawning…'; dotClass = 'spinning'; }
@@ -65,6 +98,17 @@ export function StatusBar() {
   const showCost = cost && cost.usage.total_tokens > 0;
   const costStr = cost ? formatUsd(cost.usd) : '';
   const turnsStr = cost ? `${cost.usage.turns} turn${cost.usage.turns === 1 ? '' : 's'}` : '';
+
+  // Context bar shows only when a session is bound. Color-grade matches
+  // the daemon's trim threshold of ~80%: green < 60, yellow 60-85, red > 85.
+  const showCtx = !!sessionId && !!ctx;
+  const ctxLevel = ctx
+    ? (ctx.percent > 85 ? 'hot' : ctx.percent >= 60 ? 'warm' : 'cool')
+    : 'cool';
+  const ctxPctStr = ctx ? `${Math.round(ctx.percent)}%` : '';
+  const ctxTokStr = ctx
+    ? `${formatTokens(ctx.used_tokens)}/${formatTokens(ctx.max_context)} tokens`
+    : '';
 
   return (
     <div className="status-bar">
@@ -78,6 +122,28 @@ export function StatusBar() {
         {label}
       </button>
       <span className="item">model: {modelName || '—'}</span>
+      {showCtx && ctx && (
+        <span
+          className={`item status-context status-context-${ctxLevel}`}
+          title={
+            `Context window: ${ctx.used_tokens.toLocaleString()} / ` +
+            `${ctx.max_context.toLocaleString()} tokens (${ctx.percent}% used). ` +
+            `${ctx.turns} turn${ctx.turns === 1 ? '' : 's'}, ` +
+            `~${ctx.avg_turn_tokens.toLocaleString()} tok/turn avg. ` +
+            `Auto-trim engages near 80%.`
+          }
+        >
+          <span className="status-context-bar">
+            <span
+              className="status-context-fill"
+              style={{ width: `${Math.min(100, Math.max(0, ctx.percent))}%` }}
+            />
+          </span>
+          <span className="status-context-label">
+            {ctxPctStr} · {ctxTokStr}
+          </span>
+        </span>
+      )}
       {showCost && (
         <span
           className="item status-cost"
@@ -122,6 +188,15 @@ function formatUsd(n: number): string {
   if (n < 0.01) return `$${n.toFixed(4)}`;
   if (n < 1) return `$${n.toFixed(3)}`;
   return `$${n.toFixed(2)}`;
+}
+
+/** "12345" → "12k", "999" → "999", "1234567" → "1.2M". */
+function formatTokens(n: number): string {
+  if (!Number.isFinite(n) || n <= 0) return '0';
+  if (n < 1000) return String(n);
+  if (n < 10_000) return `${(n / 1000).toFixed(1)}k`;
+  if (n < 1_000_000) return `${Math.round(n / 1000)}k`;
+  return `${(n / 1_000_000).toFixed(1)}M`;
 }
 
 function StatsModal({ client, onClose }: { client: GodbotClient; onClose: () => void }) {

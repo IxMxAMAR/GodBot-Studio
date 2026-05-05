@@ -1239,6 +1239,42 @@
   font-size: 10px;
 }
 
+/* Sub-project 111: context-window indicator on the status bar.
+   Same tabular-nums treatment as .status-cost; the bar mirrors the
+   trim threshold (auto-trim engages near 80% of max_context). */
+.status-bar .status-context {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.9;
+  cursor: default;
+}
+.status-bar .status-context-bar {
+  position: relative;
+  display: inline-block;
+  width: 56px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-2, rgba(255, 255, 255, 0.08));
+  overflow: hidden;
+  vertical-align: middle;
+}
+.status-bar .status-context-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  border-radius: 4px;
+  transition: width 200ms ease, background-color 200ms ease;
+}
+.status-bar .status-context-cool .status-context-fill { background: var(--success); }
+.status-bar .status-context-warm .status-context-fill { background: var(--warn); }
+.status-bar .status-context-hot .status-context-fill  { background: var(--danger); }
+.status-bar .status-context-hot .status-context-label { color: var(--danger); }
+.status-bar .status-context-label {
+  font-size: 11px;
+  letter-spacing: 0.2px;
+}
+
 /* Sub-project 27: cumulative daemon stats modal. */
 .stats-modal-backdrop {
   position: fixed;

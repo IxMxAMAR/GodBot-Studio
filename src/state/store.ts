@@ -108,7 +108,27 @@ export const useStore = create<State>()(
     (set, get) => ({
   workspace: null,
   fileTree: [],
-  setWorkspace: (path) => set({ workspace: path }),
+  // Workspace-aware setter: when the path actually changes, drop session
+  // state too. Sessions live on disk under `<workspace>/.godbot-sessions/`
+  // so reusing a stale `sessionId` from the previous workspace (which is
+  // exactly what zustand/persist used to do) ends up showing chat history
+  // from the OLD workspace under the NEW one. The auto-create-session
+  // path in ChatPanel re-binds a fresh sid against the new workspace.
+  setWorkspace: (path) => set((s) => {
+    if (s.workspace === path) {
+      // No-op: same path (including null === null). Don't clobber state.
+      return { workspace: path };
+    }
+    return {
+      workspace: path,
+      sessionId: null,
+      messages: [],
+      // Per-session caches that would otherwise leak across workspaces.
+      feedbackByKey: {},
+      inlineCompletionsUnsupported: false,
+      planRunning: false,
+    };
+  }),
   setFileTree: (tree) => set({ fileTree: tree }),
   refreshTree: async () => {
     const { workspace } = get();
@@ -227,6 +247,12 @@ export const useStore = create<State>()(
     }),
     {
       name: 'godbot-studio-ui',
+      // IMPORTANT: do NOT persist `sessionId`, `messages`, `workspace`,
+      // `feedbackByKey`, or any per-session caches. Sessions are scoped
+      // to `<workspace>/.godbot-sessions/<sid>/` on disk; reusing a sid
+      // across launches (or across workspace switches) leaks chat history
+      // from one workspace into another. `sessionId` re-resolves on every
+      // launch via the workspace's `.godbot-sessions/` listing.
       partialize: (state) => ({
         leftWidth: state.leftWidth,
         rightWidth: state.rightWidth,

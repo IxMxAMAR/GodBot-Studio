@@ -68,6 +68,21 @@ export interface SessionUsage {
   turns: number;
 }
 
+/**
+ * GET /api/sessions/{sid}/context_usage. Estimates the size of the
+ * NEXT LLM request (current message log + a small system-prompt
+ * allowance) against the configured `cfg.llm.max_context`. Distinct
+ * from `SessionUsage` which is cumulative across all turns.
+ */
+export interface ContextUsage {
+  used_tokens: number;
+  max_context: number;
+  /** 0..100, capped at 100. */
+  percent: number;
+  turns: number;
+  avg_turn_tokens: number;
+}
+
 /** GET /api/sessions/{sid}/cost. */
 export interface SessionCost {
   usd: number;
@@ -437,6 +452,18 @@ export class GodbotClient {
   async getSessionCost(sid: string): Promise<SessionCost> {
     const r = await fetch(`${this.baseUrl}/api/sessions/${sid}/cost`);
     if (!r.ok) throw new Error(`getSessionCost ${r.status}: ${await r.text()}`);
+    return await r.json();
+  }
+
+  /**
+   * GET /api/sessions/{sid}/context_usage — how full the model's
+   * context window is for the next turn (sub-project 111). Drives the
+   * status-bar context indicator so the user knows when they're
+   * approaching the trim threshold (~80% of max).
+   */
+  async getContextUsage(sid: string): Promise<ContextUsage> {
+    const r = await fetch(`${this.baseUrl}/api/sessions/${sid}/context_usage`);
+    if (!r.ok) throw new Error(`getContextUsage ${r.status}: ${await r.text()}`);
     return await r.json();
   }
 
