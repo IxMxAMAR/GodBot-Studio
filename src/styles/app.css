@@ -1361,6 +1361,78 @@
 .chat-thumb:hover { color: var(--text); background: var(--surface-2); }
 .chat-thumb.active { color: var(--accent); opacity: 1; }
 
+/* Fork-from-here button — sits in the same row as the thumbs but uses
+ * a slightly larger glyph + a small left margin to visually separate it
+ * from the rating buttons. Inherits hover/active behaviour from .chat-thumb. */
+.chat-fork-btn {
+  margin-left: 6px;
+  font-size: 13px;
+}
+
+/* Transient toast that appears at the top of the chat panel after a
+ * successful Fork action. Auto-dismisses on a 4s timer. */
+.chat-fork-toast {
+  background: var(--accent);
+  color: var(--bg);
+  padding: 4px 10px;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border-bottom: 1px solid var(--border);
+}
+.chat-fork-toast button {
+  background: transparent;
+  border: none;
+  color: var(--bg);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 4px;
+}
+.chat-fork-toast button:hover { opacity: 0.7; }
+
+/* 🔍 dry-run button in the chat composer toolbar. Sits between the
+ * textarea and the Send button. Visually muted unless hovered. */
+.chat-composer .chat-dryrun-btn {
+  background: var(--surface-2);
+  color: var(--text-muted);
+  padding: 0 10px;
+  border-radius: 3px;
+  font-weight: 400;
+  border: 1px solid var(--border);
+}
+.chat-composer .chat-dryrun-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--surface);
+}
+.chat-composer .chat-dryrun-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Top-of-app banner used by the auto-update plumbing to surface a
+ * non-blocking "update available" hint. Sits above the title bar so
+ * it never steals chat or editor real estate. */
+.update-banner {
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 11px;
+  padding: 4px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.update-banner button {
+  background: transparent;
+  border: 1px solid var(--bg);
+  color: var(--bg);
+  padding: 1px 8px;
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 11px;
+}
+.update-banner button:hover { background: var(--bg); color: var(--accent); }
+
 /* Recent-workspaces dropdown rendered inside <WorkspacePicker> when
  * the daemon's /api/workspaces returns at least one entry. Plain
  * vertical list of buttons; hover swaps in the surface-2 background. */

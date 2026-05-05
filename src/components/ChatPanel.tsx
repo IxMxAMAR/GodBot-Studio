@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { GodbotClient, GodbotEvent } from '../api/godbot';
+import { GodbotClient, GodbotEvent, AgentDryRunResult } from '../api/godbot';
 import { useStore } from '../state/store';
 import { ToolCallCard } from './ToolCallCard';
 import { GateCard } from './GateCard';
@@ -178,6 +178,74 @@ export function ChatPanel() {
     } catch (e) {
       console.warn('postFeedback failed', e);
       if (prev) useStore.getState().setFeedbackRating(key, prev);
+    }
+  }
+
+  /**
+   * Fork the current session at the assistant turn rendered by `messageIdx`.
+   * Mirrors `SessionList.switchTo` after the fork: reload the new session's
+   * LLM-format history and bind the chat panel to it. Surfaces failures as
+   * error bubbles so the user has a recovery hint.
+   */
+  async function forkAtAssistant(messageIdx: number) {
+    if (!sessionId) return;
+    const targetIndex = computeTargetIndex(messageIdx);
+    if (targetIndex < 0) return;
+    try {
+      const { session_id: newSid } = await client.forkSession(sessionId, targetIndex);
+      const info = await client.getSession(newSid);
+      const restored = (info?.messages ?? [])
+        .filter((m) => m.role === 'user' || m.role === 'assistant')
+        .map((m) => ({
+          id: crypto.randomUUID(),
+          role: m.role as 'user' | 'assistant',
+          text: m.content,
+        }));
+      useStore.getState().clearChat();
+      useStore.getState().setSessionId(newSid);
+      if (info?.model) useStore.getState().setModel(info.model);
+      useStore.getState().setMessages(restored);
+      setForkToast(`Forked at turn ${targetIndex} → ${newSid.slice(0, 12)}`);
+    } catch (e: any) {
+      appendMessage({
+        id: crypto.randomUUID(),
+        role: 'error',
+        text: `Fork failed: ${e?.message ?? e}`,
+      });
+    }
+  }
+
+  // Transient "Forked → new session …" toast. Auto-dismisses after 4s.
+  // Distinct from chat-error/chat-bubble — this is a status notification
+  // that sits at the top of the chat panel above the message list.
+  const [forkToast, setForkToast] = useState<string | null>(null);
+  useEffect(() => {
+    if (!forkToast) return;
+    const id = setTimeout(() => setForkToast(null), 4000);
+    return () => clearTimeout(id);
+  }, [forkToast]);
+
+  // Dry-run inspector modal state. `dryRunResult` non-null = modal open.
+  // `dryRunLoading` covers the brief spinner window between click and
+  // daemon response. Errors surface inline in the modal body.
+  const [dryRunResult, setDryRunResult] = useState<AgentDryRunResult | null>(null);
+  const [dryRunLoading, setDryRunLoading] = useState(false);
+  const [dryRunError, setDryRunError] = useState<string | null>(null);
+
+  async function openDryRun() {
+    if (!sessionId) return;
+    setDryRunResult(null);
+    setDryRunError(null);
+    setDryRunLoading(true);
+    try {
+      const r = await client.agentDryRun(sessionId, input || undefined);
+      setDryRunResult(r);
+    } catch (e: any) {
+      setDryRunError(String(e?.message ?? e));
+      // Open the modal anyway so the user sees the error.
+      setDryRunResult({ system_prompt: '', mode: 'unknown', tool_catalog: [] });
+    } finally {
+      setDryRunLoading(false);
     }
   }
 
@@ -459,6 +527,17 @@ export function ChatPanel() {
 
   return (
     <div className="chat-panel">
+      {forkToast && (
+        <div className="chat-fork-toast" role="status">
+          <span>{forkToast}</span>
+          <button
+            type="button"
+            onClick={() => setForkToast(null)}
+            title="Dismiss"
+            aria-label="Dismiss"
+          >×</button>
+        </div>
+      )}
       <div className="chat-conversation" ref={conversationRef}>
         {messages.map((m, mi) => {
           if (m.role === 'user') {
@@ -498,6 +577,7 @@ export function ChatPanel() {
                   <ThumbsRow
                     messageIndex={mi}
                     onRate={(r) => { void rateAssistant(mi, r); }}
+                    onFork={() => { void forkAtAssistant(mi); }}
                   />
                 )}
               </div>
@@ -573,6 +653,16 @@ export function ChatPanel() {
           />
         )}
         <button
+          type="button"
+          className="chat-dryrun-btn"
+          onClick={openDryRun}
+          disabled={!sessionId || streaming || dryRunLoading}
+          title="Inspect what the agent would send without actually sending"
+          aria-label="Dry-run inspector"
+        >
+          {dryRunLoading ? '…' : '🔍'}
+        </button>
+        <button
           onClick={() => {
             if (streaming) {
               abortRef.current?.abort();
@@ -587,6 +677,119 @@ export function ChatPanel() {
           {streaming ? <StopIcon /> : 'Send'}
         </button>
       </div>
+      {dryRunResult && (
+        <DryRunModal
+          result={dryRunResult}
+          error={dryRunError}
+          onClose={() => { setDryRunResult(null); setDryRunError(null); }}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Modal that surfaces the result of `POST /api/agent/dry_run`. Reuses the
+ * `.stats-modal-*` CSS so we don't grow the stylesheet for a one-off
+ * inspector. ESC and the × button close. Tool catalog + system prompt
+ * are rendered as inert pre/list — this view is read-only by design,
+ * the dry-run does NOT send the message.
+ */
+function DryRunModal({
+  result,
+  error,
+  onClose,
+}: {
+  result: AgentDryRunResult;
+  error: string | null;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  const commandName =
+    typeof (result as Record<string, unknown>).command_name === 'string'
+      ? String((result as Record<string, unknown>).command_name)
+      : null;
+
+  return (
+    <div className="stats-modal-backdrop" onClick={onClose}>
+      <div
+        className="stats-modal"
+        style={{ minWidth: 520, maxWidth: 820, width: '70vw' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="stats-modal-head">
+          <span>Dry-run inspector</span>
+          <button onClick={onClose} title="Close (Esc)">×</button>
+        </div>
+        {error && <div className="stats-modal-err">{error}</div>}
+        <div
+          className="stats-modal-body"
+          style={{ maxHeight: '70vh', overflowY: 'auto' }}
+        >
+          <div className="stats-modal-section">
+            <div className="stats-modal-h">Mode</div>
+            <div>
+              <code style={{ fontSize: 11 }}>{result.mode || '(unknown)'}</code>
+              {commandName && (
+                <span style={{ marginLeft: 6, opacity: 0.7 }}>
+                  ({commandName})
+                </span>
+              )}
+            </div>
+          </div>
+          <div className="stats-modal-section">
+            <div className="stats-modal-h">
+              Tool catalog ({result.tool_catalog?.length ?? 0})
+            </div>
+            {result.tool_catalog && result.tool_catalog.length > 0 ? (
+              <ol style={{ marginTop: 4, fontSize: 11 }}>
+                {result.tool_catalog.map((t, i) => (
+                  <li key={`${t.name}-${i}`} title={t.description ?? ''}>
+                    <code>{t.name}</code>
+                    {t.description && (
+                      <span style={{ marginLeft: 6, opacity: 0.7 }}>
+                        — {String(t.description).slice(0, 80)}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <div style={{ opacity: 0.6, fontStyle: 'italic' }}>
+                (no tools in this turn)
+              </div>
+            )}
+          </div>
+          <div className="stats-modal-section">
+            <div className="stats-modal-h">System prompt</div>
+            <pre
+              style={{
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                background: 'var(--surface-2)',
+                border: '1px solid var(--border)',
+                borderRadius: 3,
+                padding: 8,
+                margin: 0,
+                maxHeight: 360,
+                overflowY: 'auto',
+                fontFamily: 'var(--font-mono)',
+                fontSize: 11,
+                lineHeight: 1.45,
+              }}
+            >
+              {result.system_prompt || '(empty)'}
+            </pre>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -599,9 +802,11 @@ export function ChatPanel() {
 function ThumbsRow({
   messageIndex,
   onRate,
+  onFork,
 }: {
   messageIndex: number;
   onRate: (rating: 'up' | 'down') => void;
+  onFork: () => void;
 }) {
   const sessionId = useStore((s) => s.sessionId);
   const messages = useStore((s) => s.messages);
@@ -638,6 +843,19 @@ function ThumbsRow({
         aria-label="Rate not helpful"
       >
         {rating === 'down' ? '▼' : '▽'}
+      </button>
+      <button
+        type="button"
+        className="chat-thumb chat-fork-btn"
+        onClick={() => {
+          if (window.confirm(`Fork session at turn ${targetIndex}? You'll switch to the new session.`)) {
+            onFork();
+          }
+        }}
+        title="Fork from here (new session, history truncated to this turn)"
+        aria-label="Fork from this assistant turn"
+      >
+        ⑂
       </button>
     </div>
   );

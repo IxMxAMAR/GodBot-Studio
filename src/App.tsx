@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { checkForUpdate } from './api/updater';
 import { TitleBar } from './components/TitleBar';
 import { ActivityBar } from './components/ActivityBar';
 import { StatusBar } from './components/StatusBar';
@@ -34,6 +35,25 @@ export default function App() {
     document.documentElement.setAttribute('data-theme', theme);
   }, [theme]);
 
+  // Auto-update probe — runs once at boot. Failures (no pubkey, offline,
+  // not running under Tauri) are swallowed by `checkForUpdate`, so a
+  // dev-server load won't show the banner. The banner is purely
+  // informational; install happens via plugin-updater on next launch
+  // (or when the user wires `update.downloadAndInstall()` later).
+  const [updateInfo, setUpdateInfo] = useState<{ version: string; notes?: string | null } | null>(null);
+  const [updateBannerDismissed, setUpdateBannerDismissed] = useState(false);
+  useEffect(() => {
+    let cancel = false;
+    (async () => {
+      const r = await checkForUpdate();
+      if (cancel) return;
+      if (r.available && r.version) {
+        setUpdateInfo({ version: r.version, notes: r.notes });
+      }
+    })();
+    return () => { cancel = true; };
+  }, []);
+
   const showFiles = activity === 'files';
   const showMemory = activity === 'memory';
   const showLeft = showFiles || showMemory;
@@ -46,6 +66,19 @@ export default function App() {
 
   return (
     <div className="app-root">
+      {updateInfo && !updateBannerDismissed && (
+        <div className="update-banner" role="status">
+          <span>
+            Update available: v{updateInfo.version} — restart Studio to install.
+          </span>
+          <button
+            type="button"
+            onClick={() => setUpdateBannerDismissed(true)}
+            title="Dismiss"
+            aria-label="Dismiss update banner"
+          >Dismiss</button>
+        </div>
+      )}
       <TitleBar workspace={workspace} />
       <div className="main-area" style={{ gridTemplateColumns }}>
         <ActivityBar active={activity} onPick={setActivity} />

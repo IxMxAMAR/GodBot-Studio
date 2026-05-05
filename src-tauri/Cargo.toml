@@ -21,6 +21,11 @@ tauri-build = { version = "2", features = [] }
 tauri = { version = "2", features = [] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
+# Auto-updater. Reads `plugins.updater.endpoints` from tauri.conf.json
+# and exposes a check()/downloadAndInstall() pair via @tauri-apps/plugin-updater.
+# A signing pubkey MUST be set in tauri.conf.json before shipping a release —
+# see docs/RELEASE.md for how to generate one with `tauri signer generate`.
+tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", features = ["json", "blocking"] }
