@@ -28,8 +28,8 @@ Standalone desktop IDE for collaborating with the [GodBot](https://github.com/Ix
 ## Develop
 
 ```bash
-git clone <this-repo> <studio-checkout>
-cd <studio-checkout>
+git clone https://github.com/IxMxAMAR/GodBot-Studio
+cd GodBot-Studio
 npm install
 npm run tauri dev
 ```
@@ -44,7 +44,7 @@ Outputs `src-tauri/target/release/godbot-studio.exe` plus installers under `src-
 
 ## Configure
 
-For now, the Python path used to spawn the GodBot daemon is hardcoded in `src/components/WorkspacePicker.tsx`. If your venv lives elsewhere, edit that path. (Phase B will move this to a settings UI.)
+The default Python path used to spawn the GodBot daemon is defined in `src/api/config.ts` (`PYTHON_PATH`). Override it at runtime in the Settings panel, or edit the compile-time default if your GodBot venv lives elsewhere.
 
 ## What ships in v0.1.0 (Phase A)
 
@@ -61,7 +61,7 @@ For now, the Python path used to spawn the GodBot daemon is hardcoded in `src/co
 - File tree refresh after agent edits is best-effort — only the active workspace root is re-listed; nested folders that are currently expanded are not auto-refreshed (use the refresh button or collapse/re-expand).
 - Monaco editor adds ~3 MB to the bundle (self-hosted; no CDN load required).
 
-## What's next (Phase B, future sessions)
+## Roadmap (Phase B)
 
 - Integrated terminal
 - Settings UI (daemon path, themes, keybindings)
